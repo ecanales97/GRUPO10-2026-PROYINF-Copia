@@ -16,7 +16,7 @@ const About = () => {
   const [originalImageSize, setOriginalImageSize] = useState({ width: 1000, height: 600 });
   const [usarRecorte, setUsarRecorte] = useState(false);
 
-  // 📏 Redimensionar imagen manteniendo aspecto a 1000x600
+  //  Redimensionar imagen manteniendo aspecto a 1000x600
   const resizeImage = (file, targetWidth = 1000, targetHeight = 600) =>
     new Promise((resolve) => {
       const img = new Image();
@@ -37,7 +37,7 @@ const About = () => {
       img.src = URL.createObjectURL(file);
     });
 
-  // 📍 Zonas para cada tipo de carnet (coordenadas para 1000x600)
+  // Zonas para cada tipo de carnet (coordenadas para 1000x600)
   const zonasViejo = [
     { nombre: "Nombre", left: 340, top: 75, width: 470, height: 150 },
     { nombre: "Datos 1", left: 340, top: 220, width: 220, height: 190 },
@@ -66,7 +66,7 @@ const About = () => {
     setUsarRecorte(false);
   };
 
-  // 🖱️ Funciones para el recorte manual
+  //  Funciones para el recorte manual
   const getMousePos = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -131,7 +131,7 @@ const About = () => {
     ctx.setLineDash([]);
   };
 
-  // 🔄 Redimensionar imagen recortada a 1000x600
+  //  Redimensionar imagen recortada a 1000x600
   const resizeCroppedImage = (imageDataUrl) => 
     new Promise((resolve) => {
       const img = new Image();
@@ -176,7 +176,7 @@ const About = () => {
     
     const cropped = cropCanvas.toDataURL("image/png");
     
-    // 🔄 Redimensionar la imagen recortada a 1000x600
+    // Redimensionar la imagen recortada a 1000x600
     const resizedCroppedImage = await resizeCroppedImage(cropped);
     setCroppedImage(resizedCroppedImage);
     setUsarRecorte(true);
@@ -226,7 +226,7 @@ const About = () => {
       <br />
       <br />
 
-      {/* 🔘 Selector manual de tipo */}
+      {/*  Selector manual de tipo */}
       <label>
         <input
           type="radio"
@@ -249,7 +249,7 @@ const About = () => {
       <br />
       <br />
 
-      {/* 🎯 Selector de modo (recortar o usar imagen completa) */}
+      {/*  Selector de modo (recortar o usar imagen completa) */}
       {imageUrl && (
         <div style={{ marginBottom: 20 }}>
           <label>
@@ -271,7 +271,7 @@ const About = () => {
         </div>
       )}
 
-      {/* 🖼️ Recorte MANUAL con canvas (solo si se selecciona recortar) */}
+      {/* Recorte MANUAL con canvas (solo si se selecciona recortar) */}
       {imageUrl && usarRecorte && !croppedImage && (
         <div style={{ marginTop: 20 }}>
           <h4>🎯 Selecciona el área a recortar (arrastra el mouse)</h4>
@@ -377,5 +377,5 @@ const About = () => {
     </div>
   );
 };
-
+// comentario de prueba
 export default About;
