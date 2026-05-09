@@ -44,7 +44,7 @@ const Index = () => {
                         >
                             <Span>
                                 <Scan size={"1rem"}/>
-                                Escanear Carnet
+                                Escanear cosas bonitas.
                             </Span>
                         </button>
                     </div>

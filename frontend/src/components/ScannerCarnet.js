@@ -1,381 +1,173 @@
-import { useState, useRef } from "react";
-import Tesseract from "tesseract.js";
+import React, { useState } from "react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const About = () => {
-  const [imageUrl, setImageUrl] = useState(null);
-  const [croppedImage, setCroppedImage] = useState(null);
-  const [resultados, setResultados] = useState([]);
-  const [procesando, setProcesando] = useState(false);
-  const [tipo, setTipo] = useState("nuevo");
-  
-  // Estados para el recorte manual
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selection, setSelection] = useState({ startX: 0, startY: 0, endX: 0, endY: 0 });
-  const canvasRef = useRef(null);
-  const imgRef = useRef(null);
-  const [originalImageSize, setOriginalImageSize] = useState({ width: 1000, height: 600 });
-  const [usarRecorte, setUsarRecorte] = useState(false);
+const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(API_KEY);
 
-  //  Redimensionar imagen manteniendo aspecto a 1000x600
-  const resizeImage = (file, targetWidth = 1000, targetHeight = 600) =>
-    new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const ctx = canvas.getContext("2d");
-        
-        // Dibujar imagen redimensionada
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-        resolve({
-          dataUrl: canvas.toDataURL("image/png"),
-          width: targetWidth,
-          height: targetHeight
-        });
-      };
-      img.src = URL.createObjectURL(file);
+const MODOS_CONFIG = {
+  carnet: {
+    titulo: "Cédula de Identidad",
+    icono: "🪪",
+    prompt: `Analiza esta cédula de identidad chilena.Es crítico que el RUN y el N° de Serie (documento) sean exactos. Extrae en JSON plano: 
+    {"run": "RUT", "nombres": "Nombres", "apellidos": "Paterno y Materno", "serie": "N° Documento", "vencimiento": "DD-MM-AAAA", "nacionalidad":"País de origen"}`,
+    campos: [
+      { label: "RUT", key: "run", icon: "🆔" },
+      { label: "Nombres", key: "nombres", icon: "👤" },
+      { label: "Apellidos", key: "apellidos", icon: "🧬" },
+      { label: "N° Serie", key: "serie", icon: "📜" },
+      { label: "Vencimiento", key: "vencimiento", icon: "🗓️" },
+      { label: "Nacionalidad", key: "nacionalidad", icon: "🗺️"}
+    ]
+  },
+  liquidaciones: {
+    titulo: "Liquidaciones de Sueldo",
+    icono: "💰",
+    prompt: `Analiza esta liquidación de sueldo. Extrae en JSON plano:
+    {"empresa": "Nombre empresa", "mes": "Mes/Año", "liquido": "Monto líquido a pagar", "haberes": "Total haberes", "nombre":"Nombre completo de la persona", "rut": "RUT"}`,
+    campos: [
+      { label: "Empresa", key: "empresa", icon: "🏢" },
+      { label: "Periodo", key: "mes", icon: "📅" },
+      { label: "Sueldo Líquido", key: "liquido", icon: "💵" },
+      { label: "Total Haberes", key: "haberes", icon: "📈" },
+      { label: "RUT", key: "rut", icon: "🆔" },
+      { label: "Nombre del trabajador", key: "nombre", icon: "👤" },
+    ]
+  },
+  afp: {
+    titulo: "Certificado AFP",
+    icono: "🏦",
+    prompt: `Analiza este certificado de cotizaciones AFP. Extrae en JSON plano:
+    {"afp": "Nombre AFP", "meses_cotizados": "Número total de meses", "renta_imponible": "Última renta imponible", "nombre":"Nombre completo de la persona", "rut": "RUT"}`,
+    campos: [
+      { label: "Institución", key: "afp", icon: "🏛️" },
+      { label: "Meses Totales", key: "meses_cotizados", icon: "📊" },
+      { label: "Renta Imponible", key: "renta_imponible", icon: "💎" },
+      { label: "RUT", key: "rut", icon: "🆔" },
+      { label: "Nombre del trabajador", key: "nombre", icon: "👤" },
+    ]
+  },
+  domicilio: {
+    titulo: "Comprobante Domicilio",
+    icono: "🏠",
+    prompt: `Analiza este documento. Enfocate en extraer la direccion y nombre de la persona. Extrae en JSON plano:
+    {"titular": "Nombre completo", "direccion": "Dirección completa", "comuna": "Comuna"}`,
+    campos: [
+      { label: "Titular", key: "titular", icon: "👤" },
+      { label: "Dirección", key: "direccion", icon: "📍" },
+      { label: "Comuna", key: "comuna", icon: "🗺️" }
+    ]
+  }
+};
+
+const ScannerIA = () => {
+  const [datos, setDatos] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [modo, setModo] = useState("carnet");
+
+  const styles = `
+    .container { background-color: #040501; color: #eef5dc; min-height: 100vh; padding: 40px 20px; font-family: system-ui; }
+    .tabs-container { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 25px; padding-bottom: 10px; }
+    .tab-btn { 
+      white-space: nowrap; padding: 10px 18px; border-radius: 12px; border: 1px solid #287f87; 
+      background: transparent; color: #287f87; cursor: pointer; transition: 0.3s;
+    }
+    .tab-btn.active { background: #c6de8f; color: #040501; border-color: #c6de8f; font-weight: bold; }
+    .upload-box { border: 2px dashed #287f87; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 30px; }
+    .dark-card { background: #0d0e0a; padding: 25px; border-radius: 15px; border: 1px solid #287f87; max-width: 600px; margin: 0 auto; }
+    .dato-row { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
+    .dato-label { color: #c6de8f; font-size: 0.7rem; text-transform: uppercase; display: block; }
+    .dato-value { color: #eef5dc; font-size: 1rem; font-family: monospace; }
+    .reloj { animation: spin 2s linear infinite; display: inline-block; }
+    @keyframes spin { from {transform: rotate(0deg)} to {transform: rotate(360deg)} }
+  `;
+
+  const fileToGenerativePart = async (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve({ inlineData: { data: reader.result.split(",")[1], mimeType: file.type } });
+      reader.readAsDataURL(file);
     });
-
-  // Zonas para cada tipo de carnet (coordenadas para 1000x600)
-  const zonasViejo = [
-    { nombre: "Nombre", left: 340, top: 75, width: 470, height: 150 },
-    { nombre: "Datos 1", left: 340, top: 220, width: 220, height: 190 },
-    { nombre: "Zona 2", left: 560, top: 220, width: 240, height: 190 },
-    { nombre: "Rut", left: 100, top: 490, width: 220, height: 100 },
-  ];
-
-  const zonasNuevo = [
-    { nombre: "Nombre", left: 290, top: 75, width: 500, height: 180 },
-    { nombre: "Datos 1", left: 290, top: 240, width: 230, height: 210 },
-    { nombre: "Zona 2", left: 640, top: 240, width: 260, height: 210 },
-    { nombre: "Rut", left: 0, top: 490, width: 290, height: 100 },
-  ];
-
-  const handleImageUpload = async (e) => {
+  };
+const procesarConIA = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Redimensionar a 1000x600 para estandarizar
-    const { dataUrl, width, height } = await resizeImage(file, 1000, 600);
-    setImageUrl(dataUrl);
-    setOriginalImageSize({ width, height });
-    setCroppedImage(null);
-    setResultados([]);
-    setSelection({ startX: 0, startY: 0, endX: 0, endY: 0 });
-    setUsarRecorte(false);
-  };
+    setLoading(true);
+    setDatos(null);
 
-  //  Funciones para el recorte manual
-  const getMousePos = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    
-    // Calcular escala entre el canvas visual y el tamaño real
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
-    };
-  };
+    try {
+      // 1. CAMBIO DE MODELO A 3.1 FLASH-LITE
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-3.1-flash-lite" 
+      });
 
-  const handleMouseDown = (e) => {
-    const pos = getMousePos(e);
-    setIsSelecting(true);
-    setSelection({
-      startX: pos.x,
-      startY: pos.y,
-      endX: pos.x,
-      endY: pos.y
-    });
-  };
+      const imagePart = await fileToGenerativePart(file);
+      const config = MODOS_CONFIG[modo];
 
-  const handleMouseMove = (e) => {
-    if (!isSelecting) return;
-    
-    const pos = getMousePos(e);
-    setSelection(prev => ({
-      ...prev,
-      endX: pos.x,
-      endY: pos.y
-    }));
-    
-    drawSelection();
-  };
+      // 2. CONFIGURACIÓN DE GENERACIÓN PARA JSON PURO (Evita errores de formato)
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [
+          { text: config.prompt }, 
+          imagePart
+        ]}],
+        generationConfig: {
+          responseMimeType: "application/json", // Fuerza la salida a JSON
+        }
+      });
 
-  const handleMouseUp = () => {
-    setIsSelecting(false);
-  };
-
-  const drawSelection = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const img = imgRef.current;
-    
-    // Redibujar la imagen
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    
-    // Dibujar el rectángulo de selección
-    const { startX, startY, endX, endY } = selection;
-    const width = endX - startX;
-    const height = endY - startY;
-    
-    ctx.strokeStyle = "#00ff00";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.strokeRect(startX, startY, width, height);
-    
-    ctx.setLineDash([]);
-  };
-
-  //  Redimensionar imagen recortada a 1000x600
-  const resizeCroppedImage = (imageDataUrl) => 
-    new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1000;
-        canvas.height = 600;
-        const ctx = canvas.getContext("2d");
-        
-        // Dibujar la imagen recortada redimensionada a 1000x600
-        ctx.drawImage(img, 0, 0, 1000, 600);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.src = imageDataUrl;
-    });
-
-  const confirmarRecorte = async () => {
-    const canvas = canvasRef.current;
-    const { startX, startY, endX, endY } = selection;
-    
-    const width = Math.abs(endX - startX);
-    const height = Math.abs(endY - startY);
-    const x = Math.min(startX, endX);
-    const y = Math.min(startY, endY);
-    
-    if (width === 0 || height === 0) {
-      alert("Por favor, selecciona un área válida para recortar");
-      return;
-    }
-    
-    const cropCanvas = document.createElement("canvas");
-    const cropCtx = cropCanvas.getContext("2d");
-    
-    cropCanvas.width = width;
-    cropCanvas.height = height;
-    
-    cropCtx.drawImage(
-      canvas,
-      x, y, width, height,
-      0, 0, width, height
-    );
-    
-    const cropped = cropCanvas.toDataURL("image/png");
-    
-    // Redimensionar la imagen recortada a 1000x600
-    const resizedCroppedImage = await resizeCroppedImage(cropped);
-    setCroppedImage(resizedCroppedImage);
-    setUsarRecorte(true);
-  };
-
-  const usarImagenCompleta = () => {
-    setUsarRecorte(false);
-    setCroppedImage(null);
-  };
-
-  const leerZonas = async () => {
-    // Usar imagen recortada o imagen completa según la selección
-    const source = usarRecorte ? croppedImage : imageUrl;
-    if (!source) return;
-    setProcesando(true);
-
-    const zonas = tipo === "nuevo" ? zonasNuevo : zonasViejo;
-    const nuevasLecturas = [];
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    for (const zona of zonas) {
-      const { left, top, width, height } = zona;
-      canvas.width = width;
-      canvas.height = height;
-
-      const image = new Image();
-      image.src = source;
-      await image.decode();
+      const response = await result.response;
+      const text = response.text();
       
-      // Asegurar que usamos las coordenadas correctas para la imagen de 1000x600
-      ctx.drawImage(image, left, top, width, height, 0, 0, width, height);
+      
+      setDatos(JSON.parse(text));
 
-      const cropped = canvas.toDataURL("image/png");
-      const { data } = await Tesseract.recognize(cropped, "spa");
-      nuevasLecturas.push({ titulo: zona.nombre, texto: data.text.trim() });
+    } catch (err) {
+      console.error("Error procesando con Gemini 3.1 Flash-Lite:", err);
+      alert("Error al analizar el documento. Revisa la consola.");
+    } finally {
+      setLoading(false);
     }
-
-    setResultados(nuevasLecturas);
-    setProcesando(false);
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>🔍 OCR por tipo de carnet</h2>
-      <input type="file" accept="image/*" onChange={handleImageUpload} />
-      <br />
-      <br />
+    <div className="container">
+      <style>{styles}</style>
+      
+      <h2 style={{ textAlign: "center", color: "#c6de8f", marginBottom: "30px" }}>📄 Validador de Documentos</h2>
 
-      {/*  Selector manual de tipo */}
-      <label>
-        <input
-          type="radio"
-          value="viejo"
-          checked={tipo === "viejo"}
-          onChange={(e) => setTipo(e.target.value)}
-        />
-        Carnet viejo
-      </label>
-      <label style={{ marginLeft: 10 }}>
-        <input
-          type="radio"
-          value="nuevo"
-          checked={tipo === "nuevo"}
-          onChange={(e) => setTipo(e.target.value)}
-        />
-        Carnet nuevo
-      </label>
-
-      <br />
-      <br />
-
-      {/*  Selector de modo (recortar o usar imagen completa) */}
-      {imageUrl && (
-        <div style={{ marginBottom: 20 }}>
-          <label>
-            <input
-              type="radio"
-              checked={!usarRecorte}
-              onChange={usarImagenCompleta}
-            />
-            Usar imagen completa
-          </label>
-          <label style={{ marginLeft: 15 }}>
-            <input
-              type="radio"
-              checked={usarRecorte}
-              onChange={() => setUsarRecorte(true)}
-            />
-            Recortar área manualmente
-          </label>
-        </div>
-      )}
-
-      {/* Recorte MANUAL con canvas (solo si se selecciona recortar) */}
-      {imageUrl && usarRecorte && !croppedImage && (
-        <div style={{ marginTop: 20 }}>
-          <h4>🎯 Selecciona el área a recortar (arrastra el mouse)</h4>
-          <p style={{ fontSize: "12px", color: "#666" }}>
-            💡 La imagen se redimensionará automáticamente a 1000x600px después del recorte
-          </p>
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <canvas
-              ref={canvasRef}
-              width={originalImageSize.width}
-              height={originalImageSize.height}
-              style={{ 
-                border: "2px solid #ccc", 
-                cursor: "crosshair",
-                width: "600px",
-                height: "auto"
-              }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            />
-            <img
-              ref={imgRef}
-              src={imageUrl}
-              alt="Original"
-              style={{ display: "none" }}
-              onLoad={() => {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext("2d");
-                const img = imgRef.current;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              }}
-            />
-          </div>
-          <br />
-          <button onClick={confirmarRecorte} style={{ marginTop: 10 }}>
-            ✂️ Confirmar recorte seleccionado
+      <div className="tabs-container">
+        {Object.keys(MODOS_CONFIG).map((key) => (
+          <button 
+            key={key}
+            className={`tab-btn ${modo === key ? "active" : ""}`}
+            onClick={() => { setModo(key); setDatos(null); }}
+          >
+            {MODOS_CONFIG[key].icono} {MODOS_CONFIG[key].titulo}
           </button>
-        </div>
-      )}
-
-      {/* Vista previa de imagen (recortada o completa) */}
-      {(imageUrl && !usarRecorte) || croppedImage ? (
-        <div style={{ marginTop: 20 }}>
-          <h4>📸 {usarRecorte ? "Imagen recortada lista" : "Imagen completa lista"}</h4>
-          <img 
-            src={usarRecorte ? croppedImage : imageUrl} 
-            alt={usarRecorte ? "Recortada" : "Completa"} 
-            style={{ 
-              maxWidth: "600px", 
-              border: "1px solid #ccc",
-              marginBottom: "10px"
-            }} 
-          />
-          <br />
-          
-          {/* Mostrar zonas OCR en la imagen */}
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <img
-              src={usarRecorte ? croppedImage : imageUrl}
-              alt="preview con zonas"
-              style={{ width: "600px", border: "1px solid #ccc" }}
-            />
-            {(tipo === "nuevo" ? zonasNuevo : zonasViejo).map((zona, i) => (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  left: `${(zona.left / 1000) * 100}%`,
-                  top: `${(zona.top / 600) * 100}%`,
-                  width: `${(zona.width / 1000) * 100}%`,
-                  height: `${(zona.height / 600) * 100}%`,
-                  border: "2px dashed red",
-                  pointerEvents: "none",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Botón para procesar OCR */}
-      {imageUrl && (
-        <button 
-          onClick={leerZonas} 
-          disabled={procesando || (usarRecorte && !croppedImage)}
-          style={{ marginTop: 10 }}
-        >
-          {procesando ? "Procesando..." : "🧠 Leer zonas OCR"}
-        </button>
-      )}
-
-      {/* Resultados del OCR */}
-      <div style={{ marginTop: 20 }}>
-        {resultados.map((r, i) => (
-          <div key={i} style={{ marginTop: 10 }}>
-            <strong>{r.titulo}</strong>
-            <pre style={{ background: "#f4f4f4", padding: 10 }}>{r.texto}</pre>
-          </div>
         ))}
       </div>
+
+      <div className="upload-box">
+        {loading ? (
+          <div><span className="reloj">⏳</span> <p>Analizando {MODOS_CONFIG[modo].titulo}...</p></div>
+        ) : (
+          <input type="file" accept="image/*,application/pdf" onChange={procesarConIA} />
+        )}
+      </div>
+
+      {datos && (
+        <div className="dark-card">
+          <h4 style={{ color: "#c6de8f", marginTop: 0 }}>Resultados Extraídos</h4>
+          {MODOS_CONFIG[modo].campos.map((campo, i) => (
+            <div className="dato-row" key={i}>
+              <span className="dato-label">{campo.icon} {campo.label}</span>
+              <span className="dato-value">{datos[campo.key] || "No detectado"}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-// comentario de prueba
-export default About;
+
+export default ScannerIA;
