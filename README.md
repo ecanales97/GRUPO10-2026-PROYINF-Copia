@@ -64,6 +64,8 @@ docker-compose down -v
 
 Se necesita:
 - [Docker](https://www.docker.com/)
+- `.env` en la raiz del proyecto, con las siguientes variables de entorno:
+  - `REACT_APP_GEMINI_API_KEY`: API KEY de [Google AI Studio](https://aistudio.google.com) (puedes pedirnos el API KEY que estamos utilizando igualmente).
 
 ## URLs
 
