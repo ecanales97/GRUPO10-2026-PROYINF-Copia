@@ -13,7 +13,7 @@ const About = () => {
         <FillContainer>
             <div className="container d-flex flex-column fit-flex justify-content-center py-4">
                 <div className="mb-5">
-                    <h1 className="display-4 mb-4 krona-one-regular text-primary">Sobre el Proyecto</h1>
+                    <h1 className="display-2 baskervville-italic text-uppercase">Sobre el Proyecto</h1>
                     <p>Gestión y Simulación de Créditos de Consumo</p>
                 </div>
 

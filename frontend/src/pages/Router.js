@@ -15,7 +15,14 @@ import Register from "pages/Register";
 
 import CreditsRouter from "pages/credits/Router";
 
+import FillContainer from "components/containers/FillContainer";
+import SpinnerGrow from "components/spinners/SpinnerGrow";
+
+import { useCatalogs } from "hooks/useCatalogs";
+
 import PATH from "config/paths";
+import ErrorPage from "./ErrorPage";
+import { useCredits } from "context/creditsContext";
 
 const PageTransition = () => {
     const location = useLocation();
@@ -59,6 +66,25 @@ const Main = ({
 }
 
 const AppRoutes = () => {
+    const { loading:loadingCatalogs, error:errorCatalogs } = useCatalogs();
+    const { loading:loadingCredits , error:errorCredits } = useCredits();
+
+    if (loadingCatalogs || loadingCredits) return (
+        <FillContainer>
+            <SpinnerGrow
+                className="text-primary"
+                style={{
+                    width: "5rem",
+                    height: "5rem",
+                }}
+            />
+        </FillContainer>
+    );
+
+    if (errorCatalogs || errorCredits) return (
+        <ErrorPage/>
+    );
+
     return (
         <Routes>
             <Route element={<Main/>}>

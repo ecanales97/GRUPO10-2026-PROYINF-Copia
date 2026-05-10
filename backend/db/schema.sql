@@ -196,17 +196,17 @@ CREATE TABLE clients (
     id SERIAL PRIMARY KEY,
     userId INT UNIQUE REFERENCES users(id) ON DELETE SET NULL,
 
-    nationalId TEXT NOT NULL,
+    nationalId TEXT UNIQUE NOT NULL,
 
     birthDate DATE,
     maritalStatusId INT REFERENCES clientMaritalStatus(id) ON DELETE RESTRICT,
 
-    primaryAddress INT,
+    primaryAddress INT NULL,
 
     deletedAt TIMESTAMP,
 
     createdAt TIMESTAMP NOT NULL DEFAULT NOW(),
-    updatedAt TIMESTAMP NOT NULL DEFAULT NOW(),
+    updatedAt TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- CLIENT DETAILS
@@ -271,7 +271,7 @@ CREATE TABLE clientAssets (
     id SERIAL PRIMARY KEY,
     clientId INT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
 
-    type INT NOT NULL REFERENCES assetTypes(id) ON DELETE RESTRICT,
+    assetTypeId INT NOT NULL REFERENCES assetTypes(id) ON DELETE RESTRICT,
     value NUMERIC(12,2),
 
     sourceId INT REFERENCES clientDataSources(id) ON DELETE RESTRICT,
@@ -288,7 +288,7 @@ CREATE TABLE clientLiabilities (
     id SERIAL PRIMARY KEY,
     clientId INT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
 
-    type INT NOT NULL REFERENCES liabilityTypes(id) ON DELETE RESTRICT,
+    liabilityTypeId INT NOT NULL REFERENCES liabilityTypes(id) ON DELETE RESTRICT,
     amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
     monthlyPayment NUMERIC(12,2) CHECK (monthlyPayment > 0),
 
@@ -311,7 +311,7 @@ CREATE TABLE simulations (
     termMonths INT NOT NULL CHECK (termMonths > 0),
     apr NUMERIC(6,3) NOT NULL CHECK (apr >= 0),
 
-    score INT NOT NULL,
+    score INT NOT NULL CHECK (score >= 0),
     riskLevelId INT NOT NULL REFERENCES riskLevels(id) ON DELETE RESTRICT,
 
     resultSnapshot JSONB,
@@ -356,7 +356,7 @@ CREATE TABLE documents (
     documentTypeId INT NOT NULL REFERENCES documentTypes(id) ON DELETE RESTRICT,
     sourceId INT NOT NULL REFERENCES clientDataSources(id) ON DELETE RESTRICT,
 
-    fileUrl TEXT NOT NULL,
+    fileUrl TEXT NOT NULL CHECK (fileUrl <> ''),
     metadata JSONB,
 
     deletedAt TIMESTAMP,
@@ -403,7 +403,7 @@ CREATE TABLE applicationAssets (
     id SERIAL PRIMARY KEY,
     applicationId INT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
 
-    type INT NOT NULL REFERENCES assetTypes(id) ON DELETE RESTRICT,
+    assetTypeId INT NOT NULL REFERENCES assetTypes(id) ON DELETE RESTRICT,
     value NUMERIC(12,2),
 
     sourceId INT REFERENCES clientDataSources(id) ON DELETE RESTRICT,
@@ -417,7 +417,7 @@ CREATE TABLE applicationLiabilities (
     id SERIAL PRIMARY KEY,
     applicationId INT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
 
-    type INT NOT NULL REFERENCES liabilityTypes(id) ON DELETE RESTRICT,
+    liabilityTypeId INT NOT NULL REFERENCES liabilityTypes(id) ON DELETE RESTRICT,
     amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
     monthlyPayment NUMERIC(12,2),
 
@@ -542,6 +542,15 @@ CREATE INDEX idxClientIncomeClient ON clientIncome(clientId);
 CREATE INDEX idxClientEmploymentClient ON clientEmployment(clientId);
 CREATE INDEX idxClientAssetsClient ON clientAssets(clientId);
 CREATE INDEX idxClientLiabilitiesClient ON clientLiabilities(clientId);
+
+CREATE INDEX idxSimulationsClient
+ON simulations(clientId);
+
+CREATE INDEX idxDocumentsApplication
+ON documents(applicationId);
+
+CREATE INDEX idxInstallmentsDueDate
+ON creditInstallments(dueDate);
 
 -- TRIGGERS
 
