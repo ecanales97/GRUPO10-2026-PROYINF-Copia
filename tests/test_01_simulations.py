@@ -13,22 +13,27 @@ FIRST_PAYMENT_DATE = (datetime.today() + timedelta(days=45)).strftime("%Y-%m-%d"
 # CONSIDERARAN PARA ESTAS PRUEBAS !!!!
 # CUANDO ESTEN SI SE METERAN XD
 class TestSimulation(unittest.TestCase):
-    def setUp(self):
-        # CONFIG (PARAMETROS)
+    @classmethod
+    def setUpClass(cls):
+        print("PREPARANDO DATOS DE PRUEBA PARA SIMULACIONES DE CREDITO DE CONSUMO")
+
         config_response = requests.get(f"{BASE_API}/consumption")
+
         if config_response.status_code != 200:
-            raise Exception("NO SE PUDO OBTENER CONFIG DE CREDITOS")
+            raise Exception(
+                "NO SE PUDO OBTENER CONFIG DE CREDITOS"
+            )
         params = config_response.json()["data"]["parameters"]
 
         # LIMITS
-        self.min_term = params["term"]["min"]
-        self.max_term = params["term"]["max"]
+        cls.min_term = params["term"]["min"]
+        cls.max_term = params["term"]["max"]
 
-        self.min_amount = params["amount"]["min"]
-        self.max_amount = params["amount"]["max"]
+        cls.min_amount = params["amount"]["min"]
+        cls.max_amount = params["amount"]["max"]
 
         # DATA
-        self.base_data = {
+        cls.base_data = {
             "nationalId": "12.345.678-9",
             "useSimplePersonalInformation": True,
             "income": 600_000,
@@ -36,6 +41,12 @@ class TestSimulation(unittest.TestCase):
             "termMonthly": 12,
             "firstPaymentDate": FIRST_PAYMENT_DATE
         }
+
+        print("DATOS LISTOS\n")
+
+    @classmethod
+    def tearDownClass(cls):
+        print("\nFIN DE LAS PRUEBAS")
 
     def getApiUrl(self, creditType):
         return f"{BASE_API}/{creditType}/simulation"
