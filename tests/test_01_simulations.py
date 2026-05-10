@@ -183,7 +183,8 @@ class TestSimulation(unittest.TestCase):
                 "name": "invalid_credit_type",
                 "credit_type": "GRANDE_YE_AKA_KANYE_WEST",
                 "data": self.base_data,
-                "expected_status": 400
+                "expected_status": 400,
+                "expected_error": "Tipo de crédito inválido.",
             },{
                 "name": "term_above_max",
                 "credit_type": "consumption",
@@ -191,7 +192,9 @@ class TestSimulation(unittest.TestCase):
                     **self.base_data,
                     "termMonthly": self.max_term + 1
                 },
-                "expected_status": 400
+                "expected_status": 400,
+                "expected_error": "Datos inválidos.",
+                "expected_field": "termMonthly",
             },{
                 "name": "term_below_min",
                 "credit_type": "consumption",
@@ -199,7 +202,9 @@ class TestSimulation(unittest.TestCase):
                     **self.base_data,
                     "termMonthly": self.min_term - 1
                 },
-                "expected_status": 400
+                "expected_status": 400,
+                "expected_error": "Datos inválidos.",
+                "expected_field": "termMonthly",
             },{
                 "name": "amount_above_max",
                 "credit_type": "consumption",
@@ -207,7 +212,9 @@ class TestSimulation(unittest.TestCase):
                     **self.base_data,
                     "amount": self.max_amount + 1
                 },
-                "expected_status": 400
+                "expected_status": 400,
+                "expected_error": "Datos inválidos.",
+                "expected_field": "amount",
             },{
                 "name": "amount_below_min",
                 "credit_type": "consumption",
@@ -215,7 +222,9 @@ class TestSimulation(unittest.TestCase):
                     **self.base_data,
                     "amount": self.min_amount - 1
                 },
-                "expected_status": 400
+                "expected_status": 400,
+                "expected_error": "Datos inválidos.",
+                "expected_field": "amount",
             },
         ]
 
@@ -225,13 +234,19 @@ class TestSimulation(unittest.TestCase):
                     self.getApiUrl(case["credit_type"]),
                     json=case["data"]
                 )
-                self.assertEqual(
-                    response.status_code,
-                    case["expected_status"]
-                )
+
+                self.assertEqual(response.status_code, case["expected_status"])
 
                 body = response.json()
+
                 self.assertIn("error", body)
+                self.assertEqual(body["error"], case["expected_error"])
+
+                if "expected_field" in case:
+                    self.assertIn("fields", body)
+                    self.assertIn("fieldErrors", body["fields"])
+                    self.assertIn(case["expected_field"], body["fields"]["fieldErrors"])
+                    self.assertGreater(len(body["fields"]["fieldErrors"][case["expected_field"]]), 0)
 
 if __name__ == "__main__":
     unittest.main()
