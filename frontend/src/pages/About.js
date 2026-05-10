@@ -56,7 +56,7 @@ const About = () => {
                 </div>
             </div>
             <BtnsContainer>
-                <button className="btn btn-secondary" onClick={() => navigate("/")}>
+                <button className="btn btn-secondary btn-opacity-25" onClick={() => navigate("/")}>
                     <Span>
                         <ArrowLeft size={"1rem"} />
                         Volver al Inicio

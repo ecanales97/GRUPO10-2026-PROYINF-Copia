@@ -1,25 +1,28 @@
+import Container from "components/containers/Container";
+import FillContainer from "components/containers/FillContainer";
+import Span from "components/Span";
+import PATH from "config/paths";
 import { useNavigate } from "react-router-dom";
 
 const NotFound = () => {
     const navigate = useNavigate();
-
     return (
-        <div className="container align-items-center justify-content-center d-flex flex-column fit-flex">
-            <div className="d-flex flex-column align-items-center">
-                <h1 className="display-1 krona-one-regular">
+        <FillContainer>
+            <Container className="align-items-center">
+                <h1 className="display-1 baskervville-italic">
                     404
                 </h1>
-                <p>
+                <Span>
                     Página no encontrada
-                </p>
+                </Span>
                 <button
                     className="btn btn-primary"
-                    onClick={() => navigate("/")}
+                    onClick={() => navigate(PATH.index.build())}
                 >
                     ir al inicio
                 </button>
-            </div>
-        </div>
+            </Container>
+        </FillContainer>
     );
 };
 

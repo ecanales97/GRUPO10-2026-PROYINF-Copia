@@ -5,7 +5,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app:cached  
+      - ./frontend:/app:cached
+      - ./shared:/app/src/shared
       - /app/node_modules
     env_file:
       - .env
@@ -27,7 +28,10 @@ services:
       - "5000:5000"
     volumes:
       - ./backend:/app:cached
+      - ./shared:/app/shared
       - /app/node_modules
+    env_file:
+      - .env
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
@@ -36,6 +40,7 @@ services:
       - SECRET_KEY=clavesupersecretalolxd
       - PORT=5000
       - FRONTEND_URL=http://localhost:3000
+      - GEMINI_API_KEY=${REACT_APP_GEMINI_API_KEY}
     depends_on:
       - db
 

@@ -1,10 +1,13 @@
+import { parseMoneyNumber, parseMoneyString, parseRut } from "utils/parsers";
+import { backendUrl } from "./backend";
+
 // solo para testeo
 export const handleDelay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * con este se crea el key para los "otherField"
  */
-export const handleOtherKey = (key) => `${key}_otro`;
+export const handleOtherKey = (key) => `${key}_other`;
 
 /**
  * para que los props opcionales no tengan valor "" o null
@@ -80,7 +83,7 @@ export const handleValidation = (values, schema, step) => {
  * transforma los `values` del formulario, usarlo antes de validar o enviar.
  * 
  * Lo principal es transformar los valores a los que corresponden y mueve
- * los keys tipo "key_otro", al "key" que corresponde, para que su validacion
+ * los keys tipo "key_other", al "key" que corresponde, para que su validacion
  * y envio (a backend por ejemplo) funcione correctamente.
  * 
  * - values - los datos a transformar.
@@ -120,4 +123,130 @@ export const handleCurrentValues = (formData, step) => {
     });
 
     return values;
+};
+
+
+
+// HANDLERS DE CAMPOS/FIELDS
+
+export const handleRut = ({ e, field, handleChange, setFieldValue }) => {
+    handleChange(e);
+    setFieldValue(field, parseRut(e.target.value));
+};
+
+export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChange, setFieldValue, values}) => {
+    handleChange(e);
+    const input = e.target;
+    const selectionStart = input.selectionStart;
+    const value = parseMoneyNumber(input.value);
+
+    if (!value) {
+        setFieldValue(field, "");
+        return;
+    }
+
+    const newValue = parseMoneyString(value);
+    let diff = newValue.length - (values[field] ? values[field].length : 0);
+
+    if (value > max || value.length > max.toString().length) {
+        setFieldValue(field, values[field]);
+        diff = 0;
+    } else {
+        setFieldValue(field, newValue);
+    }
+
+    requestAnimationFrame(() => {
+        if (diff < 0) diff++;
+        if (diff > 0) diff--;
+        const newPos = Math.max(selectionStart + diff, 0);
+        input.setSelectionRange(newPos, newPos);
+    });
+};
+
+export const handleTerm = ({e, field, max, handleChange, setFieldValue, values}) => {
+    handleChange(e);
+    const value = e.target.value;
+    if (value > max || value.length > max.toString().length)
+        setFieldValue(field, values[field]);
+    else setFieldValue(field, value);
+};
+
+export const handleCreditConfig = async (creditType = "") => {
+    try {
+        const url = `${backendUrl}/api/credits` + (creditType ? `/${creditType}` : "")
+        const res = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        return data || null;
+    } catch (e) {
+        console.error("Error al intentar obtener configuración de el/los credito(s):",e);
+        return null;
+    }
+}
+export const handlePathBuilders = (obj, parentPath = "") => {
+    Object.values(obj).forEach((node) => {
+        if (typeof node === "object" && node.path !== undefined) {
+
+            const cleanParent = parentPath.replace(/^\/+|\/+$/g, "");
+            const cleanPath = node.path.replace(/^\/+|\/+$/g, "");
+
+            const fullPath = "/" + [cleanParent, cleanPath]
+                .filter(Boolean)
+                .join("/");
+
+            node.fullPath = fullPath;
+
+            node.build = (params = {}, query = {}) => {
+                let path = fullPath;
+                const matches = path.match(/:\w+/g);
+
+                if (matches) {
+                    matches.forEach((param) => {
+                        const key = param.slice(1);
+
+                        if (!(key in params)) {
+                            throw new Error(`Falta param: ${key}`);
+                        }
+
+                        const value = params[key];
+
+                        if (value === undefined || value === null) {
+                            throw new Error(`Param inválido: ${key}`);
+                        }
+
+                        path = path.replace(param, encodeURIComponent(value));
+                    });
+                }
+
+                const queryEntries = Object.entries(query)
+                    .filter(([_, value]) => value !== undefined && value !== null);
+
+                if (queryEntries.length > 0) {
+                    const queryString = queryEntries
+                        .flatMap(([key, value]) => {
+                            if (Array.isArray(value)) {
+                                return value.map(v =>
+                                    `${encodeURIComponent(key)}=${encodeURIComponent(v)}`
+                                );
+                            }
+
+                            return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+                        })
+                        .join("&");
+
+                    path += `?${queryString}`;
+                }
+
+                return path;
+            };
+
+            handlePathBuilders(node, fullPath);
+        }
+    });
 };

@@ -6,8 +6,6 @@ $btn-transition:
     border-color 0.05s ease-in-out,
     box-shadow 0.05s ease-in-out;
 
-$btn-border-radius: 1.5rem;
-$btn-border-radius-alt: .5rem;
 $focus-ring-opacity: .2;
 
 // $font-family-sans-serif: ("Inter", sans-serif);
@@ -41,7 +39,6 @@ $focus-ring-opacity: .2;
 
     $border-color: $secondary,
 
-    $btn-border-radius: $btn-border-radius,
     $btn-font-size: 1rem,
     $btn-padding-x: 1.5rem,
     $btn-padding-y: 0.7rem,
@@ -53,13 +50,30 @@ $focus-ring-opacity: .2;
     $input-padding-y: 0.7rem,
     $form-label-margin-bottom: 0,
 
+    $display-font-sizes: (
+        1: 6rem,
+        2: 5rem,
+        3: 4rem,
+        4: 3.5rem,
+        5: 3rem,
+        6: 2.5rem
+    ),
+
     // $font-family-sans-serif: $font-family-sans-serif,
     // $font-family-base: $font-family-sans-serif,
 );
 
 @for $i from 1 through 100 {
+    .border-opacity-#{$i} {
+        --bs-border-opacity: #{$i / 100};
+    }
+
     .bg-opacity-#{$i} {
         --bs-bg-opacity: #{$i / 100};
+    }
+
+    .opacity-#{$i} {
+        opacity: #{$i / 100} !important;
     }
 }
 
@@ -82,6 +96,12 @@ $focus-ring-opacity: .2;
             --bs-btn-disabled-bg: #{rgba($color, $opacity)};
             --bs-btn-disabled-border-color: #{rgba($color, 0)};
         }
+    }
+}
+
+@for $i from 1 through 1920 {
+    .max-width-#{$i} {
+        max-width: #{$i}px !important;
     }
 }
 
@@ -110,13 +130,38 @@ $primary-hover: mix($body-color, $primary, 50%);
 }
 
 html {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 // body {
 //     font-family: var(--bs-body-font-family) !important;
 //     letter-spacing: var(--bs-body-letter-spacing) !important;
 // }
+
+.space-mono-regular {
+    font-family: "Space Mono", monospace;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.space-mono-bold {
+    font-family: "Space Mono", monospace;
+    font-weight: 700;
+    font-style: normal;
+}
+
+.space-mono-regular-italic {
+    font-family: "Space Mono", monospace;
+    font-weight: 400;
+    font-style: italic;
+}
+
+.space-mono-bold-italic {
+    font-family: "Space Mono", monospace;
+    font-weight: 700;
+    font-style: italic;
+}
+
 
 .krona-one-regular {
     font-family: "Krona One", sans-serif;
@@ -217,6 +262,23 @@ html {
     font-style: normal;
 }
 
+
+.baskervville-regular {
+    font-family: "Baskervville", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.baskervville-italic {
+    font-family: "Baskervville", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: italic;
+    letter-spacing: -0.05em;
+    line-height: 0.9;
+}
+
 .navbar-toggler:focus {
     box-shadow: none !important;
 }
@@ -277,6 +339,10 @@ code {
 //     min-height: fit-content;
 // }
 
+.w-fit {
+    width: fit-content;
+}
+
 .fit-flex {
     flex: 1 1 auto;
     min-height: fit-content;
@@ -292,20 +358,22 @@ code {
     justify-content: center;
     flex-direction: row;
 
+    border-radius: var(--bs-border-radius-sm);
+
     gap: 0.5rem;
     width: 100%;
 }
 
 .btn-rounded-top {
-    border-radius: $btn-border-radius $btn-border-radius $btn-border-radius-alt $btn-border-radius-alt;
+    border-radius: var(--bs-border-radius-sm) var(--bs-border-radius-sm) calc(var(--bs-border-radius-sm) / 2) calc(var(--bs-border-radius-sm) / 2);
 }
 
 .btn-rounded-middle {
-    border-radius: $btn-border-radius-alt $btn-border-radius-alt $btn-border-radius-alt $btn-border-radius-alt;
+    border-radius: calc(var(--bs-border-radius-sm) / 2) calc(var(--bs-border-radius-sm) / 2) calc(var(--bs-border-radius-sm) / 2) calc(var(--bs-border-radius-sm) / 2);
 }
 
 .btn-rounded-bottom {
-    border-radius: $btn-border-radius-alt $btn-border-radius-alt $btn-border-radius $btn-border-radius;
+    border-radius: calc(var(--bs-border-radius-sm) / 2) calc(var(--bs-border-radius-sm) / 2) var(--bs-border-radius-sm) var(--bs-border-radius-sm);
 }
 
 // .form-control {
@@ -348,23 +416,69 @@ form {
 } */
 
 #navbar-collapse {
-    position: absolute;
+    position: fixed;
     top: var(--navbar-height);
-    left: 0;
+    right: 0;
     width: 100%;
     height: calc(100vh - var(--navbar-height));
 
-    display: none;
+    display: flex;
     flex-direction: column;
-
     overflow-y: auto;
 
-    transition: none;
+    max-width: 600px;
+
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+
     z-index: 1999;
+
+    transition:
+        transform 0.15s ease 0s,
+        opacity 0s linear 0.15s;
 }
 
 #navbar-collapse.show {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+
+    transition:
+        opacity 0s linear 0s,
+        transform 0.15s ease 0.0s;
+}
+
+#navbar-collapse-dropdown {
+    max-height: 0;
+    overflow: hidden;
+    width: 100%;
+    padding-left: 1.5rem;
+
+    transition: 
+        max-height 0.15s ease,
+}
+
+#navbar-collapse-dropdown.open {
+    max-height: 100vh;
+}
+
+#navbar-dropdown {
+    position: fixed;
+    top: var(--navbar-height);
+    left: 0;
+
+    width: 100%;
+    overflow-y: auto;
+
     display: flex;
+    flex-direction: column;
+
+    z-index: 1500;
+}
+
+.content-height {
+    min-height: calc( 100vh - var(--navbar-height) ) !important;
 }
 
 @media (min-width: 992px) {
@@ -413,9 +527,9 @@ form {
 }
 
 .card-selected {
-    background-color: rgba(var(--bs-primary-rgb), 0.5);
+    background-color: rgba(var(--bs-primary-rgb), 0.25);
     color: var(--bs-body-color);
-    border: 2px solid transparent;
+    border: 1px solid rgba(var(--bs-body-color-rgb), 0.5);
     transition: background-color var(--transition), color var(--transition), border-color var(--transition);
     .card-element-border {
         border: 2px solid var(--bs-body-color);
@@ -424,9 +538,9 @@ form {
 }
 
 .card-not-selected {
-    background-color: rgba(var(--bs-secondary-rgb), 0.5);
+    background-color: rgba(var(--bs-secondary-rgb), 0.25);
     color: var(--bs-body-color);
-    border: 2px solid transparent;
+    border: 1px solid rgba(var(--bs-secondary-rgb), 0.5);
     transition: background-color var(--transition), color var(--transition), border-color var(--transition);
     .card-element-border {
         border: 2px solid var(--bs-body-color);
@@ -460,6 +574,10 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+.form-check-input:checked[type=checkbox] {
+    --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3e%3cpath fill=%27none%27 stroke=%27currentColor%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%273%27 d=%27m6 10 3 3 6-6%27/%3e%3c/svg%3e") !important;
 }
 
 .react-select__control {

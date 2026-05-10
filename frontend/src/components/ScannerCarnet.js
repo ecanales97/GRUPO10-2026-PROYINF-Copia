@@ -64,8 +64,9 @@ const ScannerIA = () => {
   const [loading, setLoading] = useState(false);
   const [modo, setModo] = useState("carnet");
 
+  // ?
   const styles = `
-    .container { background-color: #040501; color: #eef5dc; min-height: 100vh; padding: 40px 20px; font-family: system-ui; }
+    .container { color: #eef5dc; min-height: 100vh; padding: 40px 20px; font-family: system-ui; }
     .tabs-container { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 25px; padding-bottom: 10px; }
     .tab-btn { 
       white-space: nowrap; padding: 10px 18px; border-radius: 12px; border: 1px solid #287f87; 

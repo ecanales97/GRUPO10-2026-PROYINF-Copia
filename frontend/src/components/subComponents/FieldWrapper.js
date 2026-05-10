@@ -1,5 +1,7 @@
 import { ErrorMessage } from "formik";
+
 import TextHelp from "components/subComponents/TextHelp";
+import Span from "components/Span";
 
 const FieldWrapper = ({
     children,
@@ -21,12 +23,17 @@ const FieldWrapper = ({
                         htmlFor={id || name}
                         className={`form-label ${hasError ? "text-danger" : ""}`}
                     >
-                        {label}
-                        {required && <span className="text-danger"> *</span>}
+                        <Span>
+                            {label}
+                            {required && 
+                                <Span className="text-danger">
+                                    *
+                                </Span>
+                            }
+                        </Span>
                     </label>
                 )}
-
-                {/* 👇 aquí está la magia */}
+                
                 {typeof children === "function"
                     ? children({ hasError })
                     : children}

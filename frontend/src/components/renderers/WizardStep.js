@@ -1,34 +1,38 @@
-import { Fragment, useCallback } from "react";
+import { Fragment, useCallback, } from "react";
 import { useFormikContext } from "formik";
+
+import { Dot } from 'lucide-react';
 
 import useWizard from "context/wizardContext";
 
 import { handleOptionalProp, handleOtherKey } from "utils/handlers";
 
-import InputsContainer from "components/containers/InputsContainer";
-
 import Select from "components/inputs/Select";
 import Input from "components/inputs/Input";
 import Span from "components/Span";
 import Container from "components/containers/Container";
-import { SurfaceRow } from "components/containers/Surface";
+import Surface, { SurfaceRow } from "components/containers/Surface";
+import SelectionInput from "components/inputs/SelectionInput";
 
-const WizardStep = () => {
+const WizardStep = ({index, length, struct}) => {
     const formikContext = useFormikContext();
-    const { values, handleChange, handleBlur, setFieldValue, errors, touched, status } = formikContext;
+    const { values, handleBlur, errors, touched, status } = formikContext;
     const wizardContext = useWizard();
-    const { struct, currIndex, length } = wizardContext;
-
-    // console.log("RENDERIZANDO STEP");
+    const { goStep } = wizardContext;
 
     const getOnChange = useCallback((field, otherField = null) => {
-        if (otherField && otherField.onChange) {
+        const { setFieldValue } = formikContext;
+        if (field.type === "checkbox" || field.type === "switch") {
+            return (e) => {
+                setFieldValue(field.name, e.target.checked);
+            };
+        }
+        else if (otherField && otherField.onChange) {
             return (e) => otherField.onChange({
                 e,
                 field:handleOtherKey(field.name),
-                handleChange,
-                setFieldValue,
-                values,
+                ...formikContext,
+                ...wizardContext,
                 ...handleOptionalProp("min", otherField.min),
                 ...handleOptionalProp("max", otherField.max),
             })
@@ -36,55 +40,67 @@ const WizardStep = () => {
             return (e) => field.onChange({
                 e,
                 field:field.name,
-                handleChange,
-                setFieldValue,
-                values,
+                ...formikContext,
+                ...wizardContext,
                 ...handleOptionalProp("min", field.min),
                 ...handleOptionalProp("max", field.max),
             })
         }
+        const { handleChange } = formikContext;
         return handleChange;
-    }, [values, handleChange, setFieldValue]);
+    }, [wizardContext, formikContext]);
 
-    const rawFields = struct.steps[currIndex].fields ?? [];
+    const rawFields = struct.steps[index].fields ?? [];
     const normalizedFields = Array.isArray(rawFields[0]) ? rawFields : [rawFields];
 
     return (
         <Container
             className="d-flex flex-column justify-content-center gap-3 w-100"
         >
-            <Container className="fit-flex-fixed px-4 justify-content-center align-items-center mb-4">
-                <Container className="w-100">
-                    <Span className="fs-2 krona-one-regular">
-                        {struct.name ?? "Formulario"}
-                    </Span>
-                    <Span className="display-5 krona-one-regular">
-                        {struct.steps[currIndex].name ?? "Completa los datos"}
+            <Container className="fit-flex-fixed justify-content-end gap-3">
+                { struct.name && 
+                <Container className="w-fit bg-primary bg-opacity-15 border border-primary border-opacity-50 p-1 pe-3 rounded-pill">
+                    <Span className="small ibm-plex-mono-regular text-uppercase user-select-none">
+                        <Dot />
+                        {struct.name}
                     </Span>
                 </Container>
-                {struct.steps[currIndex].content && struct.steps[currIndex].content({
+                }
+
+                { struct.steps[index].title &&
+                    <h1 className="display-1 baskervville-italic text-uppercase mb-0">
+                        {struct.steps[index].title}
+                    </h1>
+                }
+                
+                { struct.steps[index].content && struct.steps[index].content({
                     ...formikContext, ...wizardContext,
                 })}
             </Container>
 
             {
                 struct.stepper ? (
-                    <SurfaceRow className="align-items-center px-4 py-3 rounded-4">
-                        {struct.steps.map((step, index) => {
+                    <SurfaceRow className="align-items-center px-4 py-3 rounded-2">
+                        {struct.steps.map((step, indexStep) => {
                             return (
-                                <Fragment key={index}>
+                                <Fragment key={indexStep}>
                                     <div
-                                        className={`d-flex justify-content-center align-items-center border ${currIndex === index ? "bg-primary text-black" : ""} ${index > currIndex ? "opacity-50" : ""} border-primary rounded-pill user-select-none`}
+                                        className={`d-flex justify-content-center align-items-center border ${indexStep === index ? "bg-primary text-black" : "bg-body bg-opacity-50"} ${indexStep > index ? "opacity-25" : "cursor-pointer"} border-primary rounded-pill user-select-none`}
                                         style={{
                                             width: "2rem",
                                             height: "2rem",
                                         }}
+                                        onClick={() => {
+                                            if (indexStep <= index) {
+                                                goStep(indexStep);
+                                            }
+                                        }}
                                     >
-                                        {index+1}
+                                        {indexStep+1}
                                     </div>
                                     {
-                                        (index + 1) !== length &&
-                                        <div className={`d-flex fit-flex bg-primary ${index >= currIndex ? "bg-opacity-50" : ""}`} style={{
+                                        (indexStep + 1) !== length &&
+                                        <div className={`d-flex fit-flex bg-primary ${indexStep >= index ? "bg-opacity-25" : ""}`} style={{
                                             height: "1px",
                                         }}></div>
                                     }
@@ -98,14 +114,40 @@ const WizardStep = () => {
             }
             
             {normalizedFields.map((fields, indexFields) => {
-                if (!( struct.steps[currIndex].contentForm || fields.length !== 0 )) return null;
+                if (!( struct.steps[index].contentForm || fields.length !== 0 )) return null;
                 return (
-                    <InputsContainer key={indexFields}>
-                        {struct.steps[currIndex].contentForm && struct.steps[currIndex].contentForm({
+                    <Surface key={indexFields} className="rounded-2">
+                        {struct.steps[index].name &&
+                        <Container className="px-4 py-3 border-bottom border-primary border-opacity-10 bg-body bg-opacity-25 user-select-none">
+                            <Span>
+                                {struct.steps[index].name}
+                            </Span>
+                        </Container>
+                        }
+                        <Container className={`${struct.steps[index].name ? "pt-3" : ""} p-4`}>
+                        {struct.steps[index].contentForm && struct.steps[index].contentForm({
                             ...formikContext, ...wizardContext,
                         })}
                         {fields.map((field, indexField) => {
-                            if (field.type === "select") {
+                            if (field.type === "checkbox" || field.type === "switch") {
+                                return (
+                                    <SelectionInput
+                                        key={field.id ?? field.name ?? indexField}
+                                        type={field.type}
+                                        id={field.id ?? field.name}
+                                        name={field.name}
+                                        label={field.label ?? field.name}
+                                        checked={values[field.name] ?? false}
+                                        onChange={getOnChange(field)}
+                                        onBlur={handleBlur}
+                                        required={field.required ?? false}
+                                        {...handleOptionalProp("textHelp",field.textHelp)}
+                                        errors={errors}
+                                        touched={touched}
+                                    />
+                                )
+                            }
+                            else if (field.type === "select") {
                                 return (
                                     <Fragment
                                         key={field.id ?? field.name ?? indexField}
@@ -174,8 +216,8 @@ const WizardStep = () => {
                                 {status}
                             </Span>
                         ) }
-
-                    </InputsContainer>
+                        </Container>
+                    </Surface>
                 )
             })}
         </Container>

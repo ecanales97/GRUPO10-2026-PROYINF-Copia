@@ -1,36 +1,33 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { WizardRouter } from "components/renderers/wizardRenderer";
+import { ArrowRight } from "lucide-react";
 
-import Span from "components/Span";
+import { WizardRouter } from "components/renderers/WizardRenderer";
 
 import { useAuth } from "context/authContext";
-import { formatearRut } from "utils/formatoRut";
-import { validations } from "schemas/schema";
 
-const Login = () => {
+import Container from "components/containers/Container";
+import Span from "components/Span";
+
+import TEXT from "config/texts";
+import FIELDS from "config/fields";
+import PATH from "config/paths";
+
+const Login = ({path}) => {
     const { login } = useAuth();
-
-    const handleRut = ({ e, field, handleChange, setFieldValue }) => {
-        handleChange(e);
-        setFieldValue(field, formatearRut(e.target.value));
-    };
 
     const struct = {
         id: "login",
-        name: "Iniciar sesión",
         submitButtonText: (
             <Span>
-                Iniciar sesión
+                {TEXT.login.buttons.submit}
                 <ArrowRight size="1rem" />
             </Span>
         ),
 
         onSubmit: async ({ formData, setSubmitting, setStatus, navigate }) => {
             try {
-                const res = await login(formData.rut, formData.password);
-
+                const res = await login(formData);
                 if (res.ok) {
-                    navigate("/", { replace: true });
+                    navigate(PATH.index.build(), { replace: true });
                 } else {
                     setStatus(res.error);
                 }
@@ -43,45 +40,24 @@ const Login = () => {
         steps: [
             {
                 path: "",
-                fields: [
-                    {
-                        id: "rut",
-                        name: "rut",
-                        type: "text",
-                        placeholder: "11.111.111-1",
-                        onChange: handleRut,
-                        label: "Rut",
-                        validation: validations.rut_required,
-                        required: true,
-                    },
-                    {
-                        id: "password",
-                        name: "password",
-                        type: "password",
-                        placeholder: "••••••••",
-                        label: "Contraseña",
-                        validation: validations.password_required,
-                        required: true,
-                    }
-                ],
-
-                bottomButtons: [
-                    {
-                        text: (
-                            <Span>
-                                <ArrowLeft size={"1rem"} />
-                                Volver al inicio
-                            </Span>
-                        ),
-                        onClick: ({navigate}) => navigate("/"),
-                        className: "btn btn-secondary btn-opacity-25"
-                    }
-                ]
+                content: () => {
+                    return (
+                        <Container className="w-100">
+                            <h1 className="display-2 baskervville-italic text-uppercase">
+                                {TEXT.login.title}
+                            </h1>
+                        </Container>
+                    );
+                },
+                fields: FIELDS({
+                    nationalIdRequired: {},
+                    passwordRequired: {},
+                }, { asList: true }),
             }
         ]
     };
 
-    return WizardRouter(struct);
+    return WizardRouter(struct, path);
 };
 
 export default Login;

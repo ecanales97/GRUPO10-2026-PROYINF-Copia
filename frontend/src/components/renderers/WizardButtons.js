@@ -9,17 +9,26 @@ import useWizard from "context/wizardContext";
 import BtnsContainer from "components/containers/BtnsContainer";
 import Span from "components/Span";
 
-const WizardButtons = memo(({index, length, submitText, continueText, backText, topButtons = [], bottomButtons = []}) => {
+import TEXT from "config/texts";
+
+const WizardButtons = memo(({index, length, struct}) => {
     const navigate = useNavigate();
     const { prevStep } = useWizard();
     const { isSubmitting } = useFormikContext();
+
+    const topButtons = struct.steps[index].topButtons ?? [];
+    const bottomButtons = struct.steps[index].bottomButtons ?? [];
+    const submitText = struct.submitButtonText;
+    const continueText = struct.steps[index].continueButtonText;
+    const backText = struct.steps[index].backButtonText;
+    const goHomeText = struct.steps[index].goHomeButtonText;
 
     // console.log("RENDERIZANDO BOTONES");
 
     const ContinueButton = {
         text: continueText ?? (
             <Span>
-                Continuar
+                {TEXT.form.buttons.continue}
                 <ArrowRight size={"1rem"} />
             </Span>
         ),
@@ -29,17 +38,28 @@ const WizardButtons = memo(({index, length, submitText, continueText, backText, 
         text: backText ?? (
             <Span>
                 <ArrowLeft size={"1rem"} />
-                Volver
+                {TEXT.form.buttons.back}
             </Span>
         ),
         type: "button",
         onClick: prevStep,
         className: "btn btn-secondary btn-opacity-25",
     };
+    const GoHomeButton = {
+        text: goHomeText ?? (
+            <Span>
+                <ArrowLeft size={"1rem"} />
+                {TEXT.form.buttons.goHome}
+            </Span>
+        ),
+        type: "button",
+        onClick: () => navigate("/"),
+        className: "btn btn-secondary btn-opacity-25",
+    }
     const SubmitButton = {
         text: submitText ?? (
             <Span>
-                Enviar
+                {TEXT.form.buttons.submit}
             </Span>
         ),
         type: "submit",
@@ -55,14 +75,19 @@ const WizardButtons = memo(({index, length, submitText, continueText, backText, 
         buttons.push(ContinueButton);
         buttons.push(BackButton);
     }
+
+    if (index === 0) {
+        buttons.push(GoHomeButton);
+    }
+
     buttons = [...buttons, ...bottomButtons];
 
     return (
-        <BtnsContainer>
+        <BtnsContainer
+            bottomPosition={false}
+        >
             { buttons.map((data, index) => {
-                let cn = data.className ?? "btn btn-primary";
-                if (buttons.length > 1 && index === 0) cn += " btn-top";
-                else if (buttons.length > 1 && index === buttons.length - 1) cn += " btn-bottom";
+                const cn = data.className ?? "btn btn-primary";
 
                 const isDisabled = (data.type === "submit" && isSubmitting);
 

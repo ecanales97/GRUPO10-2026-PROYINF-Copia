@@ -8,7 +8,7 @@ import Container from "./Container";
 const FormContainer = ({children, className = "", ...props}) => {
     return (
         <Container
-            className={`gap-3 h-100 fit-flex ${className}`}
+            className={`gap-3 fit-flex position-relative ${className}`}
             style={{
                 maxWidth: 992,
                 width: "100%",

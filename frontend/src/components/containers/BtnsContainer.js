@@ -7,7 +7,7 @@ import Surface from "./Surface";
  * 
  * - retorna el contenedor
 */
-const BtnsContainer = ({ children, minWidthRow = 768, className = "", ...props }) => {
+const BtnsContainer = ({ children, bottomPosition = false, minWidthRow = 768, className = "", ...props }) => {
     const [isColumn, setIsColumn] = useState(window.innerWidth < minWidthRow);
 
     useEffect(() => {
@@ -41,9 +41,18 @@ const BtnsContainer = ({ children, minWidthRow = 768, className = "", ...props }
     });
 
     return (
-        <div className="d-flex w-100 flex-row-reverse">
+        <div
+            className={`d-flex w-100 flex-row-reverse ${bottomPosition ? "rounded-2 p-3" : ""}`}
+            style={ bottomPosition ? {
+                maxWidth: "100vw",
+                position: "fixed",
+                bottom: 0,
+                left: 0,
+                // boxShadow: "0 0 0.75rem var(--bs-body-bg)",
+            } : {} }
+        >
             <Surface
-                className={`${isColumn ? "" : "flex-row-reverse"} p-3 rounded-6 ${className}`}
+                className={`${isColumn ? "" : "flex-row-reverse"} rounded-2 p-3 ${className}`}
                 style={isColumn ? {
                     width: "100%"
                 } : {

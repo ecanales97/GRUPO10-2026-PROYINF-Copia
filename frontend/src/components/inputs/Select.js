@@ -13,13 +13,17 @@ const bootstrapSelectStyles = (hasError) => ({
             ? "var(--bs-text)"
             : "var(--bs-primary)",
         boxShadow: state.isFocused
-            ? "0 0 0 0.1rem rgba(var(--bs-primary-rgb),.25)"
+            ? `0 0 0 0.125rem rgba(var(${
+                hasError
+                ? "--bs-danger-rgb"
+                : "--bs-primary-rgb"
+            }),.25)`
             : "none",
         "&:hover": {
             borderColor: hasError ? "var(--bs-danger)" : "var(--bs-primary)",
         },
         fontSize: "1rem",
-        backgroundColor: "transparent",
+        backgroundColor: "rgba(var(--bs-body-bg-rgb), 0.5 )",
         padding: "0.7rem 1rem",
     }),
 
@@ -37,11 +41,13 @@ const bootstrapSelectStyles = (hasError) => ({
     placeholder: (base) => ({
         ...base,
         color: "var(--bs-secondary-color)",
+        margin: 0,
     }),
 
     singleValue: (base) => ({
         ...base,
         color: "var(--bs-body-color)",
+        margin: 0,
     }),
 
     dropdownIndicator: (base) => ({
@@ -63,22 +69,35 @@ const bootstrapSelectStyles = (hasError) => ({
 
     menu: (base) => ({
         ...base,
+        border: "1px solid var(--bs-body-color)",
         borderRadius: "0.375rem",
         marginTop: "4px",
-        boxShadow: "0 0.5rem 1rem rgba(var(--bs-primary-rgb),.1)",
+        boxShadow: "0 0.5rem 1rem rgba(var(--bs-primary-rgb),.25)",
         zIndex: 10,
         backgroundColor: "var(--bs-body-bg)",
+        overflow: "hidden",
+    }),
+
+    menuList: (base) => ({
+        ...base,
+        padding: 0,
     }),
 
     option: (base, state) => ({
         ...base,
         backgroundColor: state.isSelected
-            ? "var(--bs-primary)"
+            ? "rgba(var(--bs-primary-rgb), 0.25)"
             : state.isFocused
-            ? "rgba(var(--bs-secondary-rgb), 0.5)"
+            ? "rgba(var(--bs-secondary-rgb), 0.25)"
             : "transparent",
-        color: state.isSelected ? "var(--bs-body-bg)" : "var(--bs-secondary-color)",
+        color: "var(--bs-body-color)",
         cursor: "pointer",
+
+        ":active": {
+            backgroundColor: state.isSelected
+                ? "rgba(var(--bs-primary-rgb), 0.5)"
+                : "rgba(var(--bs-secondary-rgb), 0.5)",
+        },
     }),
 });
 
@@ -133,6 +152,7 @@ const Select = ({
                     inputId={id || name}
                     name={name}
                     options={rsOptions}
+                    isSearchable={false}
                     value={selectedOption}
                     onChange={handleChange}
                     onBlur={handleBlur}

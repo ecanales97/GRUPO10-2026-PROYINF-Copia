@@ -1,48 +1,81 @@
-import { Routes, Route, Outlet } from "react-router-dom";
-import Navbar from "components/Navbar";
+import { Routes, Route, Outlet, useLocation } from "react-router-dom";
 
-import Index from "pages/Index";
+import { AnimatePresence, motion } from "framer-motion";
+
+import Navbar from "components/Navbar";
+import Footer from "components/Footer";
+
+import Home from "pages/Home";
 import About from "pages/About";
 import ScannerPage from "pages/ScannerPage";
 import Historial from "pages/Historial";
 import NotFound from "pages/NotFound";
+import Login from "pages/Login";
+import Register from "pages/Register";
 
-import { Router as SimulatorRouter } from "pages/simulator/Router";
-import { Router as ApplyRouter } from "pages/apply/Router";
-import Login from "./Login";
-import Register from "./Register";
+import CreditsRouter from "pages/credits/Router";
 
-const Main = () => {
+import PATH from "config/paths";
+
+const PageTransition = () => {
+    const location = useLocation();
+    return (
+        <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                    duration: 0.2,
+                    ease: "easeOut",
+                }}
+                className="container content-height d-flex flex-column py-3 text-color"
+            >
+                <Outlet />
+            </motion.div>
+        </AnimatePresence>
+    );
+};
+
+const Main = ({
+    navbar = true,
+    animation = true,
+    footer = true,
+}) => {
     return (
         <>
-            <Navbar/>
-            <div className="container d-flex flex-column h-100 fit-flex py-3 text-color">
-                <Outlet/>
-            </div>
+            {navbar && <Navbar/>}
+            {animation && <PageTransition/>}
+            {!animation && (
+                <div
+                    className="container content-height d-flex flex-column py-3 text-color"
+                >
+                    <Outlet />
+                </div>
+            )}
+            {footer && <Footer/>}
         </>
     );
 }
 
-export const Router = () => {
+const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/" element={<Main/>}>
-                <Route index element={<Index />} />
-                <Route path="/about" element={<About/>} />
-                <Route path="/escanear" element={<ScannerPage/>} />
-                <Route path="/iniciar-sesion">
-                    {Login()}
-                </Route>
-                <Route path="/crear-cuenta">
-                    {Register()}
-                </Route>
-                {SimulatorRouter()}
-                {ApplyRouter()}
-                <Route path="/historial" element={<Historial/>} />
+            <Route element={<Main/>}>
+                <Route path={PATH.index.build()} element={<Home/>} />
+                <Route path={PATH.about.build()} element={<About/>} />
+                <Route path={PATH.scanner.build()} element={<ScannerPage/>} />
+                <Route path={PATH.history.build()} element={<Historial/>} />
                 <Route path="*" element={<NotFound/>}/>
+            </Route>
+            
+            <Route element={<Main animation={false} footer={false}/>}>
+                <Route path={`${PATH.credits.build()}/*`} element={<CreditsRouter/>}/>
+                <Route path={`${PATH.login.build()}/*`} element={<Login path={PATH.login.build()}/>} />
+                <Route path={`${PATH.register.build()}/*`} element={<Register path={PATH.register.build()}/>} />
             </Route>
         </Routes>
     )
 }
-// {WizardRouter("/crear-cuenta", [{ path: "", component: Register }])}
-// {WizardRouter("/iniciar-sesion", [{ path: "", component: Login }])}
+
+export default AppRoutes;

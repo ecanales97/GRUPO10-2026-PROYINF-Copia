@@ -55,7 +55,10 @@ docker-compose down -v
 ```
 
 > [!IMPORTANT]  
-> En windows, **Docker Desktop** debe estar abierto para que todo funcione como corresponde.
+> En windows, `Docker Desktop` debe estar abierto para que todo funcione como corresponde.
+
+> [!IMPORTANT]  
+> En linux, el comando es `docker compose`.
 
 ### Requerimientos
 

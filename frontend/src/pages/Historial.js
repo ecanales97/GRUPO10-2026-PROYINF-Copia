@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "context/authContext";
 import FillContainer from "components/containers/FillContainer";
-import { formatearDineroStrBonito } from "utils/formatoDinero";
+import { parseMoneyStringMoney } from "utils/parsers";
 
 const Historial = () => {
     const { user } = useAuth();
@@ -64,10 +64,10 @@ const Historial = () => {
                                 return (
                                     <tr key={sim.id} className={esMejorCAE ? "table-success" : ""}>
                                         <td>{new Date(sim.fecha_simulacion).toLocaleDateString()}</td>
-                                        <td className="fw-bold">{formatearDineroStrBonito(sim.monto)}</td>
+                                        <td className="fw-bold">{parseMoneyStringMoney(sim.monto)}</td>
                                         <td>{sim.plazo} meses</td>
                                         <td>
-                                            {formatearDineroStrBonito(sim.cuota_mensual)}
+                                            {parseMoneyStringMoney(sim.cuota_mensual)}
                                             {esMejorCuota && !esMejorCAE && (
                                                 <div className="badge bg-info text-dark ms-2">💰 Baja</div>
                                             )}

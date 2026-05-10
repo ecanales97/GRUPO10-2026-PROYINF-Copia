@@ -1,8 +1,7 @@
 import express from "express";
 import cors from "cors";
 
-import { router as authRouter } from "./routes/auth.js";
-import { router as simulacionRouter } from "./routes/simulacion.js";
+import { router as apiRouter } from "./routes/index.js";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -16,8 +15,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use("/api/auth", authRouter);
-app.use("/api/simulacion", simulacionRouter);
+app.use("/api", apiRouter);
 
 app.get("/", (req, res) => {
     res.send("API funcionando.");
@@ -27,6 +25,6 @@ app.listen(PORT, (e) => {
     if (e) {
         console.error("Error iniciando servidor: ", e);
     } else {
-        console.log(`Servidor en: ${PORT}`);
+        console.log(`Servidor en puerto: ${PORT}`);
     }
 });

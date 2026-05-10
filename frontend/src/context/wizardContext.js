@@ -1,13 +1,17 @@
 import { z } from "zod";
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 
-import { handleOtherKey } from "utils/handlers";
+import { handleCurrentValues, handleOtherKey } from "utils/handlers";
 import { useFormData } from "hooks/useFormData";
 import useStepValidation, { ADELANTE, ATRAS } from "hooks/useStepValidation";
 
 const wizardContext = createContext(null);
 
-export const WizardProvider = ({ children, struct }) => {
+export const WizardProvider = ({ children, struct, path }) => {
+    const lastIndexRef = useRef(null);
+    const initialValuesRef = useRef(null);
+    const basePath = path;
+
     const steps = struct.steps;
     const storageKey = `wizard-form-${struct.id}`;
     const useStorage = true;
@@ -37,7 +41,17 @@ export const WizardProvider = ({ children, struct }) => {
         return acc;
     }, {});
 
-    // schemas con zod para validaciones en cada paso
+    const normalizeValidations = (v) =>
+        Array.isArray(v) ? v :
+        v ? [v] :
+        [];
+    
+    const applyStepValidations = (schema, stepValidations) => {
+        const validations = normalizeValidations(stepValidations);
+
+        return validations.reduce((acc, fn) => fn(acc), schema);
+    };
+
     const schemas = steps.map(step => {
         if (!step.fields) return z.object({});
 
@@ -47,22 +61,34 @@ export const WizardProvider = ({ children, struct }) => {
             if (!hasFieldNameOrId(field)) return;
 
             const key = getFieldNameOrId(field);
-
             schemaObj[key] = getFieldValidation(field) ?? z.any();
         });
 
-        return z.object(schemaObj);
+        let schema = z.object(schemaObj);
+        schema = applyStepValidations(schema, step.validations);
+        return schema;
     });
 
     // se genera el formData donde se guardaran los datos de cada field y ls setters
     const { getFormData, setField, setFields, hasSavedData } = useFormData(defaultData, useStorage, storageKey);
 
-    const { nextStep, prevStep, currIndex, direction } = useStepValidation({
+    const { nextStep, prevStep, goStep, currIndex, direction } = useStepValidation({
         steps,
         schemas,
+        basePath,
         getFormData,
-        hasSavedData
+        hasSavedData,
     });
+
+    if (lastIndexRef.current !== currIndex) {
+        initialValuesRef.current = handleCurrentValues(
+            getFormData(),
+            struct.steps[currIndex]
+        );
+        lastIndexRef.current = currIndex;
+    }
+    const initialValues = initialValuesRef.current;
+    const index = lastIndexRef.current;
 
     // solo borra el formData en memoria si te sales del flujo del formulario
     useEffect(() => {
@@ -77,20 +103,23 @@ export const WizardProvider = ({ children, struct }) => {
         <wizardContext.Provider
             value={{
                 struct,
-                defaultData,
+                index,
+                length: struct.steps.length,
                 schemas,
+                initialValues,
+                defaultData,
                 getFormData,
                 setField,
                 setFields,
                 nextStep,
                 prevStep,
+                goStep,
                 hasFieldNameOrId,
                 getFieldNameOrId,
-                currIndex,
+                basePath,
                 direction,
                 ADELANTE,
                 ATRAS,
-                length: struct.steps.length,
             }}
         >
             {children}

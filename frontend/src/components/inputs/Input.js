@@ -39,7 +39,7 @@ const Input = ({
                     name={name}
                     type={type}
                     placeholder={placeholder}
-                    className={`input-form form-control ${
+                    className={`input-form form-control bg-body bg-opacity-50 ${
                         hasError ? "is-invalid" : ""
                     } ${className}`}
                     maxLength={maxLength}
