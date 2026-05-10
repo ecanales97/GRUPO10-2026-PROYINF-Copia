@@ -9,3 +9,4 @@ pgdata/
 backups/
 *.dump
 *.backup
+tests/__pycache__

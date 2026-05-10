@@ -90,6 +90,7 @@ export const simulation = async (
         }
         const parsed = schema.safeParse(simulationData);
         if (!parsed.success) {
+            console.log(parsed.error);
             return res.status(400).json({
                 error:
                     "Datos inválidos.",
