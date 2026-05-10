@@ -18,6 +18,6 @@ router.use("/clients", clientRouter);
 
 router.use("/catalogs", catalogsRouter);
 
-router.use("/document", documentRouter);
+router.use("/documents", documentRouter);
 
 export { router };

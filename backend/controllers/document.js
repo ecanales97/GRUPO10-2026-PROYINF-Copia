@@ -76,23 +76,23 @@ export const document = async (req, res) => {
 
         const base64 = file.buffer.toString("base64");
         const result = await model.generateContent({
-        contents: [
-            {
-            role: "user",
-            parts: [
-                { text: config.prompt },
+            contents: [
                 {
-                inlineData: {
-                    data: base64,
-                    mimeType: file.mimetype
+                role: "user",
+                parts: [
+                    { text: config.prompt },
+                    {
+                    inlineData: {
+                        data: base64,
+                        mimeType: file.mimetype
+                    }
+                    }
+                ]
                 }
-                }
-            ]
+            ],
+            generationConfig: {
+                responseMimeType: "application/json"
             }
-        ],
-        generationConfig: {
-            responseMimeType: "application/json"
-        }
         });
 
         const text = result.response.text();
@@ -101,5 +101,20 @@ export const document = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Error procesando documento" });
+    }
+};
+
+export const getDocumentsConfig = (req, res) => {
+    try {
+        const cleanConfig = Object.entries(MODOS_CONFIG).reduce((acc, [key, value]) => {
+            const { prompt, ...rest } = value;
+            acc[key] = rest;
+            return acc;
+        }, {});
+
+        res.json(cleanConfig);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Error obteniendo tipos de documento" });
     }
 };

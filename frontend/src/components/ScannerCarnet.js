@@ -1,56 +1,48 @@
-import React, { useState } from "react";
-
-const MODOS_CONFIG = {
-    carnet: {
-        titulo: "Cédula de Identidad",
-        icono: "🪪",
-        campos: [
-            { label: "RUT", key: "run", icon: "🆔" },
-            { label: "Nombres", key: "nombres", icon: "👤" },
-            { label: "Apellidos", key: "apellidos", icon: "🧬" },
-            { label: "N° Serie", key: "serie", icon: "📜" },
-            { label: "Vencimiento", key: "vencimiento", icon: "🗓️" },
-            { label: "Nacionalidad", key: "nacionalidad", icon: "🗺️" }
-        ]
-    },
-    liquidaciones: {
-        titulo: "Liquidaciones de Sueldo",
-        icono: "💰",
-        campos: [
-            { label: "Empresa", key: "empresa", icon: "🏢" },
-            { label: "Periodo", key: "mes", icon: "📅" },
-            { label: "Sueldo Líquido", key: "liquido", icon: "💵" },
-            { label: "Total Haberes", key: "haberes", icon: "📈" },
-            { label: "RUT", key: "rut", icon: "🆔" },
-            { label: "Nombre", key: "nombre", icon: "👤" }
-        ]
-    },
-    afp: {
-        titulo: "Certificado AFP",
-        icono: "🏦",
-        campos: [
-            { label: "AFP", key: "afp", icon: "🏛️" },
-            { label: "Meses", key: "meses_cotizados", icon: "📊" },
-            { label: "Renta Imponible", key: "renta_imponible", icon: "💎" },
-            { label: "RUT", key: "rut", icon: "🆔" },
-            { label: "Nombre", key: "nombre", icon: "👤" }
-        ]
-    },
-    domicilio: {
-        titulo: "Comprobante Domicilio",
-        icono: "🏠",
-        campos: [
-            { label: "Titular", key: "titular", icon: "👤" },
-            { label: "Dirección", key: "direccion", icon: "📍" },
-            { label: "Comuna", key: "comuna", icon: "🗺️" }
-        ]
-    }
-};
+import React, { useState, useEffect } from "react";
+import FillContainer from "components/containers/FillContainer";
+import SpinnerGrow from "components/spinners/SpinnerGrow";
 
 const ScannerIA = () => {
     const [datos, setDatos] = useState(null);
     const [loading, setLoading] = useState(false);
     const [modo, setModo] = useState("carnet");
+    const [modosConfig, setModosConfig] = useState({});
+    const [loadingConfig, setLoadingConfig] = useState(true);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const res = await fetch("http://localhost:5000/api/documents");
+                const data = await res.json();
+                setModosConfig(data);
+
+                // set default mode si existe
+                const firstKey = Object.keys(data)[0];
+                if (firstKey) setModo(firstKey);
+
+            } catch (err) {
+                console.error("Error cargando config:", err);
+            } finally {
+                setLoadingConfig(false);
+            }
+        };
+
+        fetchConfig();
+    }, []);
+
+    if (loadingConfig || Object.keys(modosConfig).length === 0) {
+        return (
+            <FillContainer>
+                <SpinnerGrow
+                    className="text-primary"
+                    style={{
+                        width: "5rem",
+                        height: "5rem",
+                    }}
+                />
+            </FillContainer>
+        );
+    }
 
     const styles = `
         .tabs-container { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 25px; padding-bottom: 10px; }
@@ -80,7 +72,7 @@ const ScannerIA = () => {
 
         try {
             const res = await fetch(
-                `http://localhost:5000/api/document/${modo}`,
+                `http://localhost:5000/api/documents/${modo}`,
                 {
                     method: "POST",
                     body: formData
@@ -107,13 +99,13 @@ const ScannerIA = () => {
             </h2>
 
             <div className="tabs-container">
-                {Object.keys(MODOS_CONFIG).map((key) => (
+                {Object.keys(modosConfig).map((key) => (
                     <button
                         key={key}
                         className={`tab-btn ${modo === key ? "active" : ""}`}
                         onClick={() => { setModo(key); setDatos(null); }}
                     >
-                        {MODOS_CONFIG[key].icono} {MODOS_CONFIG[key].titulo}
+                        {modosConfig[key]?.icono} {modosConfig[key]?.titulo}
                     </button>
                 ))}
             </div>
@@ -122,7 +114,7 @@ const ScannerIA = () => {
                 {loading ? (
                     <div>
                         <span className="reloj">⏳</span>
-                        <p>Analizando {MODOS_CONFIG[modo].titulo}...</p>
+                        <p>Analizando {modosConfig[modo]?.titulo}...</p>
                     </div>
                 ) : (
                     <input
@@ -139,7 +131,7 @@ const ScannerIA = () => {
                         Resultados Extraídos
                     </h4>
 
-                    {MODOS_CONFIG[modo].campos.map((campo, i) => (
+                    {modosConfig[modo]?.campos?.map((campo, i) => (
                         <div className="dato-row" key={i}>
                             <span className="dato-label">
                                 {campo.icon} {campo.label}
