@@ -7,7 +7,6 @@ export const ATRAS = "backward";
 
 const getCurrentPath = (location, basePath) => location.pathname.startsWith(basePath) ? location.pathname.slice(basePath.length).replace(/^\//, "") : "";
 const getCurrentIndex = (steps, currPath) => steps.findIndex(step => (step.path || "") === currPath);
-// const getPath = (path) => path || ".";
 
 const buildPath = (basePath, path = "") => {
     const base = basePath.replace(/\/+$/g, "");
@@ -18,6 +17,7 @@ const buildPath = (basePath, path = "") => {
 /**
  * UPDATE: ya no es necesario el mainPath, solo se
  * navega usando { relative: "route" }.
+ * UPDATE2: ahora puede usarse sin multiples paginas (useRouting)
  * 
  * hook que valida los pasos previos de un wizard multistep form.
  * 
@@ -35,15 +35,19 @@ const useStepValidation = ({
     schemas,
     basePath,
     getFormData,
-    hasSavedData
+    hasSavedData,
+    useRouting = true,
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
     const [ direction, setDirection ] = useState("");
+    const [ inlineIndex, setInlineIndex ] = useState(0);
 
     const currPath = getCurrentPath(location, basePath);
-    const currIndex = getCurrentIndex(steps,currPath);
+    const routedIndex = getCurrentIndex(steps, currPath);
+
+    const currIndex = useRouting ? routedIndex : inlineIndex;
 
     const goStep = useCallback((index) => {
         if (index < 0 || index >= steps.length) return;
@@ -51,16 +55,23 @@ const useStepValidation = ({
         if (index > currIndex)  setDirection(ADELANTE);
         else if (index < currIndex) setDirection(ATRAS);
 
+        if (!useRouting) {
+            setInlineIndex(index);
+            return;
+        }
+
         const p = steps[index].path;
+
         if (p) {
             navigate(buildPath(basePath, p));
             return;
         }
+
         navigate(basePath);
-    },[navigate, currIndex, steps, basePath]);
+
+    }, [navigate, currIndex, steps, basePath, useRouting]);
 
     const nextStep = () => goStep(currIndex + 1);
-
     const prevStep = () => goStep(currIndex - 1);
 
     useEffect(() => {
@@ -71,30 +82,33 @@ const useStepValidation = ({
         // si estas donde no deberias, te manda para el step 0
         // si recien se carga el forumlario (direction === "")
         // entonces tambien te manda al step 0
-        if (!hasSavedData() && (currIndex === -1 || (direction === "" && currIndex !== 0))) {
+        if (
+            !hasSavedData() &&
+            (
+                (useRouting && currIndex === -1) ||
+                (direction === "" && currIndex !== 0)
+            )
+        ) {
             goStep(0);
             return;
         }
 
         // para rederigir a la parte del formulario
         // que no esta completo
-        let newIndex = currIndex;
-        let prevHadSchema = true;
+        let firstInvalid = -1;
+
         const check = steps.length < (currIndex + 1) ? steps.length : currIndex + 1;
         const fixedFormData = handleData(getFormData());
-        for (let i = 0; i < check; i++) {
-            if ((Object.keys(schemas[i].shape).length === 0) && prevHadSchema) {
-                prevHadSchema = false;
-                newIndex = i;
-                continue;
-            }
 
-            prevHadSchema = true;
+        for (let i = 0; i < check; i++) {
+            const isEmptySchema = Object.keys(schemas[i].shape).length === 0;
+            if (isEmptySchema) continue;
+
             const stepData = handleCurrentValues(fixedFormData, steps[i]);
             const res = schemas[i].safeParse(stepData);
 
             if (!res.success) {
-                newIndex = i;
+                firstInvalid = i;
                 break;
             }
         }
@@ -103,14 +117,30 @@ const useStepValidation = ({
         // mayor al que te quiere redirigir
         // No deberia redirigir si el paso incompleto es
         // mayor o igual al que esta actualmente
-        if (currIndex > newIndex) {
+        if (firstInvalid !== -1 && currIndex > firstInvalid) {
             setDirection(ATRAS);
-            goStep(newIndex);
+            goStep(firstInvalid);
         }
 
-    }, [getFormData, schemas, steps, basePath, goStep, currIndex, direction, hasSavedData]);
+    }, [
+        getFormData,
+        schemas,
+        steps,
+        basePath,
+        goStep,
+        currIndex,
+        direction,
+        hasSavedData,
+        useRouting,
+    ]);
 
-    return { nextStep, prevStep, goStep, currIndex, direction };
+    return {
+        nextStep,
+        prevStep,
+        goStep,
+        currIndex,
+        direction
+    };
 };
 
 export default useStepValidation;

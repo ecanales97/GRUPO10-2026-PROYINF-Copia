@@ -1,14 +1,6 @@
-import { useNavigate } from "react-router-dom";
-
-import { ArrowLeft } from 'lucide-react';
-
 import FillContainer from "components/containers/FillContainer";
-import BtnsContainer from "components/containers/BtnsContainer";
-import Span from "components/Span";
 
 const About = () => {
-    const navigate = useNavigate();
-
     return (
         <FillContainer>
             <div className="container d-flex flex-column fit-flex justify-content-center py-4">
@@ -55,14 +47,6 @@ const About = () => {
                     </div>
                 </div>
             </div>
-            <BtnsContainer>
-                <button className="btn btn-secondary btn-opacity-25" onClick={() => navigate("/")}>
-                    <Span>
-                        <ArrowLeft size={"1rem"} />
-                        Volver al Inicio
-                    </Span>
-                </button>
-            </BtnsContainer>
         </FillContainer>
     );
 };

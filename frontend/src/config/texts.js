@@ -55,6 +55,12 @@ const TEXT_FIELDS = {
         textHelp: "",
     }),
 
+    currentPassword: () => ({
+        label: "Contraseña actual",
+        placeholder: "••••••••",
+        textHelp: "Debes ingresar tu contraseña actual.",
+    }),
+
     amount: ({ min, max }) => ({
         label: "Monto",
         placeholder: `${parseMoneyString(1_500_000)}`,
@@ -69,6 +75,23 @@ const TEXT_FIELDS = {
             placeholder: `${parseMoneyString(1_000_000)}`,
             textHelp: "Un aproximado de tu renta liquida mensual.",
         },
+    }),
+
+    monthlyIncome: () => ({
+        label: "Ingreso mensual",
+        placeholder: `${parseMoneyString(500_000)}`,
+        textHelp: "Monto promedio mensual del ingreso.",
+    }),
+
+    incomeType: () => ({
+        label: "Tipo de ingreso",
+        placeholder: "Selecciona el tipo de ingreso",
+        textHelp: "Origen de este ingreso.",
+    }),
+
+    isRecurring: () => ({
+        label: "¿Es un ingreso recurrente?",
+        textHelp: "Indica si este ingreso se recibe de forma periódica o habitual.",
     }),
 
     termMonthly: ({ min, max }) => ({
@@ -135,10 +158,16 @@ const TEXT_FIELDS = {
         textHelp: "Indica tu nacionalidad.",
     }),
 
-    jobs: () => ({
-        label: "Tipo de trabajo",
-        placeholder: "Selecciona tu tipo de trabajo",
-        textHelp: "Selecciona la opción que mejor describa tu situación laboral.",
+    jobType: () => ({
+        label: "Ocupación",
+        placeholder: "Selecciona tu ocupación",
+        textHelp: "Ingresa tu ocupación actual (profesión, oficio o trabajo actual).",
+    }),
+
+    contractType: () => ({
+        label: "Tipo de contrato",
+        placeholder: "Selecciona tu tipo de contrato",
+        textHelp: "",
     }),
 
     salary: () => ({
@@ -163,6 +192,16 @@ const TEXT_FIELDS = {
         label: "Valor del activo",
         placeholder: `${parseMoneyString(10_000_000)}`,
         textHelp: "Valor aproximado del activo.",
+    }),
+
+    document: () => ({
+        label: "Documento",
+        textHelp: "Puedes ingresar un documento, puede ser una imagen o un pdf.",
+    }),
+
+    documentRequired: () => ({
+        label: "Documento",
+        textHelp: "Ingresa un documento, puede ser una imagen o un pdf.",
     }),
 };
 

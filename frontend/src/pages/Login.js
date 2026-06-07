@@ -1,3 +1,5 @@
+import { useLocation } from "react-router-dom";
+
 import { ArrowRight } from "lucide-react";
 
 import { WizardRouter } from "components/renderers/WizardRenderer";
@@ -13,6 +15,8 @@ import PATH from "config/paths";
 
 const Login = ({path}) => {
     const { login } = useAuth();
+    const location = useLocation();
+    const from = location.state?.from?.pathname ?? null;
 
     const struct = {
         id: "login",
@@ -27,7 +31,7 @@ const Login = ({path}) => {
             try {
                 const res = await login(formData);
                 if (res.ok) {
-                    navigate(PATH.index.build(), { replace: true });
+                    navigate(from || PATH.index.build(), { replace: true });
                 } else {
                     setStatus(res.error);
                 }

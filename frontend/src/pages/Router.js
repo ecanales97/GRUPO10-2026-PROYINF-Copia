@@ -1,7 +1,5 @@
 import { Routes, Route, Outlet, useLocation } from "react-router-dom";
 
-import { AnimatePresence, motion } from "framer-motion";
-
 import Navbar from "components/Navbar";
 import Footer from "components/Footer";
 
@@ -13,50 +11,42 @@ import NotFound from "pages/NotFound";
 import Login from "pages/Login";
 import Register from "pages/Register";
 
-import CreditsRouter from "pages/credits/Router";
+import ErrorPage from "pages/ErrorPage";
 
-import FillContainer from "components/containers/FillContainer";
-import SpinnerGrow from "components/spinners/SpinnerGrow";
+import CreditsRouter from "pages/credits/Router";
+import SettingsRouter from "pages/settings/Router";
+import DeclarationsRouter from "pages/declarations/Router";
+
+import Placeholder from "pages/Placeholder";
+
+import SpinnerPage from "components/spinners/SpinnerPage";
+import PageTransition from "components/PageTransition";
+
+import ClientOnlyRoute from "components/ClientOnlyRoute";
+// import GuestOnlyRoute from "components/GuestOnlyRoute";
 
 import { useCatalogs } from "hooks/useCatalogs";
-
-import PATH from "config/paths";
-import ErrorPage from "./ErrorPage";
 import { useCredits } from "context/creditsContext";
 
-const PageTransition = () => {
-    const location = useLocation();
-    return (
-        <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                    duration: 0.2,
-                    ease: "easeOut",
-                }}
-                className="container content-height d-flex flex-column py-3 text-color"
-            >
-                <Outlet />
-            </motion.div>
-        </AnimatePresence>
-    );
-};
+import PATH from "config/paths";
+import { useAuth } from "context/authContext";
 
 const Main = ({
     navbar = true,
     animation = true,
     footer = true,
 }) => {
+    const location = useLocation();
+
     return (
         <>
             {navbar && <Navbar/>}
-            {animation && <PageTransition/>}
-            {!animation && (
-                <div
-                    className="container content-height d-flex flex-column py-3 text-color"
-                >
+            {animation ? (
+                <PageTransition key={location.pathname}>
+                    <Outlet />
+                </PageTransition>
+            ) : (
+                <div className="container content-height d-flex flex-column py-3 text-color">
                     <Outlet />
                 </div>
             )}
@@ -68,37 +58,42 @@ const Main = ({
 const AppRoutes = () => {
     const { loading:loadingCatalogs, error:errorCatalogs } = useCatalogs();
     const { loading:loadingCredits , error:errorCredits } = useCredits();
+    const { loading:loadingAuth, error:errorAuth } = useAuth();
 
-    if (loadingCatalogs || loadingCredits) return (
-        <FillContainer>
-            <SpinnerGrow
-                className="text-primary"
-                style={{
-                    width: "5rem",
-                    height: "5rem",
-                }}
-            />
-        </FillContainer>
-    );
+    if (loadingCatalogs || loadingCredits || loadingAuth) {
+        return <SpinnerPage/>;
+    }
 
-    if (errorCatalogs || errorCredits) return (
-        <ErrorPage/>
-    );
+    if (errorCatalogs || errorCredits || errorAuth) {
+        return <ErrorPage/>;
+    }
+
+    console.log("post");
 
     return (
         <Routes>
             <Route element={<Main/>}>
-                <Route path={PATH.index.build()} element={<Home/>} />
-                <Route path={PATH.about.build()} element={<About/>} />
-                <Route path={PATH.scanner.build()} element={<ScannerPage/>} />
-                <Route path={PATH.history.build()} element={<Historial/>} />
+                <Route path={PATH.index.path} element={<Home/>} />
+                <Route path={PATH.about.path} element={<About/>} />
+                <Route path={PATH.scanner.path} element={<ScannerPage/>} />
+
                 <Route path="*" element={<NotFound/>}/>
+
+                <Route element={<ClientOnlyRoute/>}>
+                    <Route path={PATH.dashboard.path} element={<Placeholder/>}/>
+                    <Route path={PATH.profile.path} element={<Placeholder/>}/>
+                    <Route path={PATH.simulations.path} element={<Historial/>} />
+
+                    <Route path={`${PATH.settings.path}/*`} element={<SettingsRouter/>} />
+                </Route>
             </Route>
             
             <Route element={<Main animation={false} footer={false}/>}>
-                <Route path={`${PATH.credits.build()}/*`} element={<CreditsRouter/>}/>
-                <Route path={`${PATH.login.build()}/*`} element={<Login path={PATH.login.build()}/>} />
-                <Route path={`${PATH.register.build()}/*`} element={<Register path={PATH.register.build()}/>} />
+                <Route path={`${PATH.login.path}/*`} element={<Login path={PATH.login.build()}/>} />
+                <Route path={`${PATH.register.path}/*`} element={<Register path={PATH.register.build()}/>} />
+                
+                <Route path={`${PATH.declarations.path}/*`} element={<DeclarationsRouter/>}/>
+                <Route path={`${PATH.credits.path}/*`} element={<CreditsRouter/>}/>
             </Route>
         </Routes>
     )

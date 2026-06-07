@@ -14,10 +14,13 @@ import PATH from "config/paths";
 import { objectValidations } from "shared/schemas/schema.js";
 
 import Result from "./Result";
+import { optionsIncome } from "config/options";
 
 export const Simulator = ({ path }) => {
     const { isAuthenticated } = useAuth();
     const { creditType, pathType, credit } = useCredit();
+
+    console.log(credit);
 
     const buildButtonText = (text) => (
         <Span>
@@ -88,15 +91,15 @@ export const Simulator = ({ path }) => {
 
     const commonMortgageFields = {
         propertyValue: credit.parameters.propertyValue,
-        propertyType: {},
+        propertyType: { options:credit.parameters.creditItems },
         downPayment: credit.parameters.downPayment,
         termMonthly: credit.parameters.term,
-        rateType: {},
+        rateType: { options:credit.parameters.rateTypes },
         firstPaymentDate: credit.parameters.gracePeriodMonths,
     };
 
     const clientFields = {
-        income: {},
+        income: { options:optionsIncome },
     };
 
     const creditFields = (() => {
@@ -162,7 +165,7 @@ export const Simulator = ({ path }) => {
     // STRUCT
 
     const struct = {
-        id: "simulator",
+        id: `simulator-${creditType}`,
         name: "Simulador",
 
         stepper: true,

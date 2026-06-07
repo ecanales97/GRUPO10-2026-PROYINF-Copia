@@ -22,6 +22,7 @@ const Input = ({
     className = "",
     errors = {},
     touched = {},
+    ...props
 }) => {
     return (
         <FieldWrapper
@@ -49,6 +50,7 @@ const Input = ({
                     value={value}
                     onChange={onChange}
                     onBlur={onBlur}
+                    {...props}
                 />
             )}
         </FieldWrapper>

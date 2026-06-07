@@ -16,4 +16,16 @@ export const ContainerRow = ({children, className = "", ...props}) => (
     </div>
 )
 
+export const ContainerNoGap = ({children, className = "", ...props}) => (
+    <div className={`d-flex flex-column ${className}`} {...props}>
+        {children}
+    </div>
+)
+
+export const ContainerRowNoGap = ({children, className = "", ...props}) => (
+    <div className={`d-flex flex-row ${className}`} {...props}>
+        {children}
+    </div>
+)
+
 export default Container;

@@ -9,6 +9,7 @@ const RadioGroup = ({
   required = false,
   errors = {},
   touched = {},
+  ...props
 }) => {
     return (
         <FieldWrapper
@@ -31,6 +32,7 @@ const RadioGroup = ({
                             className={`form-check-input ${
                             hasError ? "is-invalid" : ""
                             }`}
+                            {...props}
                         />
                         <label className="form-check-label">
                             {opt.label}

@@ -110,6 +110,7 @@ export const getPaymentCapacity = (
 }
 
 // helpers para getCreditsConfig
+// helpers para getCreditsConfig
 const allowedParams = [
     "amount",
     "term",
@@ -117,14 +118,39 @@ const allowedParams = [
     "propertyValue",
     "gracePeriodMonths",
 ];
-const pickParams = (config) => Object.fromEntries(
-    Object.entries(config).filter(([key]) =>
-        allowedParams.includes(key)
-    )
-);
+
+const pickParams = (config) =>
+    Object.fromEntries(
+        Object.entries(config).filter(([key]) =>
+            allowedParams.includes(key)
+        )
+    );
+
+/**
+ * agrega datos enriquecidos (cache)
+ */
+const buildParameters = (config) => ({
+    ...pickParams(config),
+    ...(config.creditItems?.length
+        ? { creditItems: config.creditItems }
+        : {}),
+
+    ...(config.rateTypes?.length
+        ? { rateTypes: config.rateTypes }
+        : {}),
+
+    ...(config.creditType
+        ? { creditType: config.creditType }
+        : {}),
+
+    ...(config.insuranceTypes
+        ? { insuranceTypes: config.insuranceTypes }
+        : {}),
+});
+
 const buildCreditConfig = (config) => ({
     meta: config.meta ?? {},
-    parameters: pickParams(config),
+    parameters: buildParameters(config),
 });
 
 /**

@@ -3,29 +3,195 @@ import { db } from "./db.js";
 const TTL = 1000 * 60 * 30;
 
 const TABLES = {
-    creditTypes: { table: "creditTypes", hasCode: true, hasDesc: true },
-    applicationTypes: { table: "applicationTypes", hasCode: true },
-    transactionTypes: { table: "transactionTypes", hasCode: true },
-    documentTypes: { table: "documentTypes", hasCode: true, hasDesc: true },
+    creditTypes: {
+        table: "creditTypes",
+        columns: [
+            "id",
+            "code",
+            "name",
+            "description",
+            "requiresItem"
+        ]
+    },
 
-    assetTypes: { table: "assetTypes", hasCode: true, hasDesc: true },
-    liabilityTypes: { table: "liabilityTypes", hasCode: true, hasDesc: true },
+    applicationTypes: {
+        table: "applicationTypes",
+        columns: ["id", "code", "name"]
+    },
 
-    clientDataSources: { table: "clientDataSources", hasCode: true, hasDesc: true },
-    auditLogTypes: { table: "auditLogTypes", hasCode: true },
+    transactionTypes: {
+        table: "transactionTypes",
+        columns: ["id", "code", "name"]
+    },
 
-    jobTypes: { table: "jobTypes" },
+    documentTypes: {
+        table: "documentTypes",
+        columns: ["id", "code", "name", "description"]
+    },
 
-    applicationStatus: { table: "applicationStatus", hasCode: true },
-    creditStatus: { table: "creditStatus", hasCode: true },
-    creditInstallmentStatus: { table: "creditInstallmentStatus", hasCode: true },
+    assetTypes: {
+        table: "assetTypes",
+        columns: ["id", "code", "name", "description", "riskModifier"]
+    },
 
-    riskLevels: { table: "riskLevels", hasCode: true },
-    decisions: { table: "decisions", hasCode: true },
+    incomeTypes: {
+        table: "incomeTypes",
+        columns: ["id", "code", "name", "description", "riskModifier"]
+    },
 
-    userRoles: { table: "userRoles", hasCode: true, hasDesc: true },
+    liabilityTypes: {
+        table: "liabilityTypes",
+        columns: ["id", "code", "name", "description"]
+    },
 
-    clientMaritalStatus: { table: "clientMaritalStatus", hasCode: true, hasDesc: true }
+    documentSources: {
+        table: "documentSources",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    clientDataSources: {
+        table: "clientDataSources",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    jobTypes: {
+        table: "jobTypes",
+        columns: ["id", "name", "riskModifier"]
+    },
+
+    contractTypes: {
+        table: "contractTypes",
+        columns: ["id", "code", "name", "description", "riskModifier"]
+    },
+
+    auditLogTypes: {
+        table: "auditLogTypes",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    applicationStatus: {
+        table: "applicationStatus",
+        columns: ["id", "code", "name"]
+    },
+
+    creditStatus: {
+        table: "creditStatus",
+        columns: ["id", "code", "name"]
+    },
+
+    creditInstallmentStatus: {
+        table: "creditInstallmentStatus",
+        columns: ["id", "code", "name"]
+    },
+
+    riskLevels: {
+        table: "riskLevels",
+        columns: ["id", "code", "name"]
+    },
+
+    decisions: {
+        table: "decisions",
+        columns: ["id", "code", "name"]
+    },
+
+    userRoles: {
+        table: "userRoles",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    clientMaritalStatus: {
+        table: "clientMaritalStatus",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    rateTypes: {
+        table: "rateTypes",
+        columns: [
+            "id",
+            "code",
+            "name",
+            "description",
+            "monthlyRateAdjustment"
+        ]
+    },
+
+    creditItems: {
+        table: "creditItems",
+        columns: [
+            "id",
+            "creditTypeId",
+            "code",
+            "name",
+            "description",
+            "riskModifier",
+            "maxLTV",
+            "maxTermMonths",
+            "isActive"
+        ]
+    },
+
+    creditRateTypes: {
+        table: "creditRateTypes",
+        columns: [
+            "id",
+            "creditTypeId",
+            "rateTypeId",
+            "isDefault"
+        ]
+    },
+
+    insuranceTypes: {
+        table: "insuranceTypes",
+        columns: [
+            "id",
+            "code",
+            "name",
+            "description",
+
+            "fixedMonthlyCost",
+            "fixedUpfrontCost",
+
+            "percentageFrom",
+            "percentageMonthlyCost",
+            "percentageUpfrontCost",
+
+            "isActive"
+        ]
+    },
+
+    creditInsuranceTypes: {
+        table: "creditInsuranceTypes",
+        columns: [
+            "id",
+            "creditTypeId",
+            "insuranceTypeId",
+            "isRequired"
+        ]
+    },
+    
+    verificationStates: {
+        table: "verificationStates",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    paymentMethodTypes: {
+        table: "paymentMethodTypes",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    brandTypes: {
+        table: "brandTypes",
+        columns: ["id", "code", "name", "description"]
+    },
+    bankTypes: {
+        table: "bankTypes",
+        columns: ["id", "code", "name", "description"]
+    },
+
+    disbursementMethodTypes: {
+        table: "disbursementMethodTypes",
+        columns: ["id", "code", "name", "description"]
+    },
 };
 
 const cache = {
@@ -35,6 +201,14 @@ const cache = {
     timestamps: {},
     loading: {}
 };
+
+const normalize = (row) =>
+    Object.fromEntries(
+        Object.entries(row).map(([k, v]) => [
+            k.toLowerCase(),
+            v
+        ])
+    );
 
 const assertTable = (table) => {
     if (!TABLES[table]) {
@@ -47,20 +221,29 @@ const isExpired = (table) => {
     return !last || Date.now() - last > TTL;
 };
 
+const buildQuery = (config) => {
+    return `
+        SELECT ${config.columns.join(", ")}
+        FROM ${config.table}
+    `;
+};
+
 const loadTable = async (tableKey) => {
-    const { table, hasCode, hasDesc } = TABLES[tableKey];
+    const config = TABLES[tableKey];
 
-    const query = `SELECT id ${hasCode ? ", code" : ""} , name ${hasDesc ? ", description" : ""} FROM ${table}`;
+    const result = await db.query(
+        buildQuery(config)
+    );
 
-    const { rows } = await db.query(query);
+    const rows = result.rows.map(normalize);
 
     const byId = {};
-    const byCode = hasCode ? {} : null;
+    const byCode = {};
 
     for (const row of rows) {
         byId[row.id] = row;
 
-        if (hasCode && row.code) {
+        if (row.code) {
             byCode[row.code] = row;
         }
     }
@@ -74,48 +257,50 @@ const loadTable = async (tableKey) => {
 };
 
 const ensureLoaded = async (table) => {
-    const cached = cache.data[table];
-
-    if (!cached) {
-        return loadTable(table);
+    if (cache.loading[table]) {
+        return cache.loading[table];
     }
 
-    if (isExpired(table) && !cache.loading[table]) {
-        cache.loading[table] = loadTable(table)
-            .finally(() => {
-                delete cache.loading[table];
-            });
+    if (!cache.data[table] || isExpired(table)) {
+        cache.loading[table] = loadTable(table).finally(() => {
+            delete cache.loading[table];
+        });
+
+        if (!cache.data[table]) {
+            return cache.loading[table];
+        }
     }
-};
-
-export const getByCode = async (table, code) => {
-    assertTable(table);
-    await ensureLoaded(table);
-
-    if (!TABLES[table].hasCode) {
-        throw new Error(`La tabla "${table}" no soporta búsqueda por code`);
-    }
-
-    return cache.byCode[table]?.[code] ?? null;
-};
-
-export const getById = async (table, id) => {
-    assertTable(table);
-    await ensureLoaded(table);
-
-    return cache.byId[table]?.[id] ?? null;
 };
 
 export const getAll = async (table) => {
     assertTable(table);
     await ensureLoaded(table);
-
     return cache.data[table] ?? [];
 };
 
+export const getById = async (table, id) => {
+    assertTable(table);
+    await ensureLoaded(table);
+    return cache.byId[table]?.[id] ?? null;
+};
+
+export const getByCode = async (table, code) => {
+    assertTable(table);
+    await ensureLoaded(table);
+    return cache.byCode[table]?.[code] ?? null;
+};
+
+export const getOptions = async (table, { value = "id", label = "name" } = {}) => {
+    assertTable(table);
+    await ensureLoaded(table);
+    return (cache.data[table] ?? []).map(row => ({
+        value: String(row[value]),
+        label: String(row[label]),
+    }));
+}
+
 export const refreshTable = async (table) => {
     assertTable(table);
-
     cache.timestamps[table] = 0;
     return loadTable(table);
 };
@@ -134,15 +319,15 @@ export const warmupCache = async () => {
     await Promise.all(
         Object.keys(TABLES).map(loadTable)
     );
+    console.log("[cache] ok")
 };
 
-const Cache = {
-    getByCode,
-    getById,
+export default {
     getAll,
+    getById,
+    getByCode,
+    getOptions,
     refreshTable,
     clearTable,
     warmupCache
 };
-
-export default Cache;

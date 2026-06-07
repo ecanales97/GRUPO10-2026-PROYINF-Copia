@@ -5,9 +5,6 @@ import { CreditsProvider } from 'context/creditsContext';
 
 import AppRoutes from 'pages/Router';
 
-// import "flatpickr/dist/themes/material_blue.css";
-
-
 function App() {
     return (
         <BrowserRouter>

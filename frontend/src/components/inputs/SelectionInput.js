@@ -20,6 +20,7 @@ const SelectionInput = ({
     className = "",
     errors = {},
     touched = {},
+    ...props
 }) => {
     return (
         <FieldWrapper
@@ -46,6 +47,7 @@ const SelectionInput = ({
                         onChange={onChange}
                         onBlur={onBlur}
                         required={required}
+                        {...props}
                     />
 
                     <label

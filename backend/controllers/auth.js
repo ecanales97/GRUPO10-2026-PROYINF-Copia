@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import { db, SECRET } from "../utils/db.js";
 
 import {
-    getClientDataByUserId,
     getRoleId,
 } from "../utils/getData.js";
 
@@ -83,8 +82,8 @@ const registerClient = async (data) => {
             [
                 name,
                 nickname,
-                phone,
                 email,
+                phone,
                 passwordHash,
                 roleId
             ]
@@ -125,44 +124,26 @@ const registerClient = async (data) => {
 };
 
 const loginClient = async (data) => {
-    const {
-        nationalId,
-        password
-    } = data;
+    const { nationalId, password } = data;
 
     const { rows } = await db.query(
-        `
-        SELECT u.*, c.*
+        `SELECT u.*, c.id as clientid
         FROM users u
-        LEFT JOIN clients c
-        ON c.userId = u.id
-        WHERE nationalId = $1;
-        `,
+        LEFT JOIN clients c ON c.userId = u.id
+        WHERE nationalId = $1;`,
         [nationalId]
     );
 
-    if (!rows.length) {
-        throw new Error("Usuario no encontrado");
-    }
+    if (!rows.length) throw new Error("Usuario no encontrado");
 
     const user = rows[0];
-
     const valid = await bcrypt.compare(password, user.passwordhash);
-
-    if (!valid) {
-        throw new Error("Contraseña incorrecta");
-    }
+    if (!valid) throw new Error("Contraseña incorrecta");
 
     return jwt.sign(
-        {
-            sub: user.id,
-            role: user.roleid,
-            name: user.name
-        },
+        { sub: user.id, role: user.roleid, clientId: user.clientid },
         SECRET,
-        {
-            expiresIn: "1h"
-        }
+        { expiresIn: "30m" }
     );
 };
 
@@ -170,43 +151,70 @@ export const register = async (req, res) => {
     try {
         const result = await registerClient(req.body);
         return res.json(result);
-
     } catch (err) {
-        return res.status(400).json({
-            error: err.message
-        });
+        return res.status(400).json({ error: err.message });
     }
 };
 
 export const login = async (req, res) => {
     try {
-        const result = await loginClient(req.body);
-        return res.json({ token:result });
+        const token = await loginClient(req.body);
 
-    } catch (err) {
-        return res.status(401).json({
-            error: err.message
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 30 * 60 * 1000,
+            path: "/"
         });
+
+        return res.json({ message: "Login exitoso" });
+    } catch (err) {
+        return res.status(401).json({ error: err.message });
     }
 };
 
-export const getMe = async (req, res) => {
+export const logout = (req, res) => {
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/"
+    });
+    return res.json({ message: "Sesión cerrada" });
+};
+
+export const refresh = (req, res) => {
     try {
-        const userId = req.user.sub;
+        const token = req.cookies?.token;
 
-        const user = await getClientDataByUserId(userId);
-
-        if (!user) {
-            return res.status(404).json({
-                error: "Usuario no encontrado",
-            });
+        if (!token) {
+            return res.status(401).json({ error: "No hay sesión activa" });
         }
 
-        return res.json(user);
+        const payload = jwt.verify(token, SECRET);
+
+        const newToken = jwt.sign(
+            {
+                sub: payload.sub,
+                role: payload.role,
+                clientId: payload.clientId
+            },
+            SECRET,
+            { expiresIn: "30m" }
+        );
+
+        res.cookie("token", newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 30 * 60 * 1000,
+            path: "/"
+        });
+
+        return res.json({ message: "Token renovado" });
 
     } catch (err) {
-        return res.status(500).json({
-            error: err.message,
-        });
+        return res.status(401).json({ error: "Token inválido o expirado" });
     }
 };

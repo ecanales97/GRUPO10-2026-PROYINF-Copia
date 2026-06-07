@@ -65,7 +65,7 @@ const getRiskAdjustment = (config, ratio) => {
  * ratio:
  * monto / (renta * cuotas)
  */
-export const calculateConsumerRisk = (
+export const calculateAmountRisk = (
     type,
     amount,
     termMonthly,
@@ -84,7 +84,7 @@ export const calculateConsumerRisk = (
  * ratio:
  * dividendo / renta
  */
-export const calculateMortgageRisk = (
+export const calculateInstallmentRisk = (
     type,
     installment,
     income
@@ -106,7 +106,7 @@ const RISK_CALCULATORS = {
         termMonthly,
         income,
     }) =>
-        calculateConsumerRisk(
+        calculateAmountRisk(
             type,
             amount,
             termMonthly,
@@ -118,7 +118,7 @@ const RISK_CALCULATORS = {
         installment,
         income,
     }) =>
-        calculateMortgageRisk(
+        calculateInstallmentRisk(
             type,
             installment,
             income
@@ -169,7 +169,7 @@ const calculateIRR = (
 /**
  * calcula CAE real
  */
-export const calculateAPR = (
+export const calculateAnnualPercentageRate = (
     amount,
     termMonthly,
     installment,
@@ -299,7 +299,10 @@ export const calculateCS = ({
     income,
 
     itemValue,
+    itemTypeId,
     downPayment,
+
+    rateTypeId,
 
     firstPaymentDate,
 
@@ -314,9 +317,32 @@ export const calculateCS = ({
         );
     }
 
-    const finalAmount = amount
-        ? amount
-        : itemValue - downPayment;
+    const defaultRateTypeId = config.rateTypes?.find(
+        r => r.isdefault
+    )?.id;
+    const resolvedRateTypeId = String(rateTypeId ?? defaultRateTypeId);
+    const resolvedRateType = config.rateTypes?.find(
+        r => String(r.id) === String(resolvedRateTypeId)
+    )?.name;
+    const itemType = config.creditItems?.find(
+        i => String(i.id) === String(itemTypeId)
+    )?.name;
+    
+    const findById = (arr, id) => arr?.find(x => String(x.id) === String(id));
+    const getRateAdjustment = (arr, id) => {
+        const res = findById(arr, id);
+
+        const val = res?.monthlyRateAdjustment ?? res?.monthlyrateadjustment;
+        const num = Number(val);
+
+        return Number.isFinite(num) ? num : 0;
+    };
+
+    const finalItemValue = itemValue ?? 0;
+    const finalDownPayment = downPayment ?? 0;
+
+    const loanAmount = finalItemValue - finalDownPayment;
+    const finalAmount = amount ?? loanAmount;
 
     // tasa base
     const baseMonthlyRate = getBaseRate(
@@ -331,10 +357,15 @@ export const calculateCS = ({
         );
     }
 
+    const adjustedBaseRate =
+        baseMonthlyRate +
+        getRateAdjustment(config.rateTypes, resolvedRateTypeId) +
+        getRateAdjustment(config.creditItems, itemTypeId);
+
     // cuota preliminar
     const preliminaryInstallment = calculateInstallment(
         finalAmount,
-        baseMonthlyRate,
+        adjustedBaseRate,
         termMonthly
     );
 
@@ -350,7 +381,7 @@ export const calculateCS = ({
     // tasa final
     const finalMonthlyRate = calculateFinalMonthlyRate(
         type,
-        baseMonthlyRate,
+        adjustedBaseRate,
         riskAdjustmentMonthly
     );
 
@@ -395,7 +426,7 @@ export const calculateCS = ({
     }
 
     // CAE
-    const APR = calculateAPR(
+    const annualPercentageRate = calculateAnnualPercentageRate(
         finalAmount,
         termMonthly,
         installment,
@@ -404,8 +435,8 @@ export const calculateCS = ({
     );
 
     if (
-        APR == null ||
-        !Number.isFinite(APR)
+        annualPercentageRate == null ||
+        !Number.isFinite(annualPercentageRate)
     ) {
         throw new Error(
             "CAE inválido"
@@ -414,26 +445,40 @@ export const calculateCS = ({
     const annualNominalRate = monthlyToAnnualNominal(finalMonthlyRate);
 
     // CTC
-    const TCC = realInstallment * termMonthly;
+    const totalCreditCost = (realInstallment * termMonthly) + upfrontCosts;
+    const totalCostOutlay = totalCreditCost + finalDownPayment;
 
     return {
-        type,
+        type: type,
 
         amount: finalAmount,
-        termMonthly,
+        termMonthly: termMonthly,
+
+        downPayment: finalDownPayment,
+        itemValue: finalItemValue,
+        itemType: itemType,
+        itemTypeId: itemTypeId,
+
+        rateType: resolvedRateType,
+        rateTypeId: resolvedRateTypeId,
 
         monthlyInstallment: Math.round(realInstallment),
-        baseMonthlyInstallment: Math.round(installment),
         monthlyRate: (finalMonthlyRate * 100).toFixed(3),
-        annualRate:(annualNominalRate * 100).toFixed(2),
+        annualRate: (annualNominalRate * 100).toFixed(2),
 
-        apr: parseFloat(APR.toFixed(2)), // cae
-        tcc: Math.round(TCC), // ctc
+        baseMonthlyRate: (baseMonthlyRate*100).toFixed(3),
+        rateTypeAdjustment: (getRateAdjustment(config.rateTypes, resolvedRateTypeId)*100).toFixed(3),
+        creditItemAdjustment: (getRateAdjustment(config.creditItems, itemTypeId)*100).toFixed(3),
+
+        apr: parseFloat(annualPercentageRate.toFixed(2)), // cae
+        tcc: Math.round(totalCreditCost), // ctc
+
+        tco: Math.round(totalCostOutlay),
 
         firstPaymentDate: firstPaymentDate,
 
-        upfrontCosts,
-        monthlyCosts,
+        upfrontCosts: upfrontCosts,
+        monthlyCosts: monthlyCosts,
     };
 };
 
@@ -448,7 +493,10 @@ export const calculateCR = ({
     income,
 
     itemValue,
+    itemTypeId,
     downPayment,
+
+    rateTypeId,
 
     firstPaymentDate,
 
@@ -491,15 +539,18 @@ export const calculateCR = ({
 
                         amount: !!amount ? m : undefined,
                         termMonthly: p,
-                        income,
+                        income: income,
 
-                        itemValue,
+                        itemValue: itemValue,
+                        itemTypeId: itemTypeId,
                         downPayment: !!amount ? undefined : itemValue - m,
 
-                        firstPaymentDate,
+                        rateTypeId: rateTypeId,
 
-                        upfrontCosts,
-                        monthlyCosts,
+                        firstPaymentDate: firstPaymentDate,
+
+                        upfrontCosts: upfrontCosts,
+                        monthlyCosts: monthlyCosts,
                     });
 
                 if (simResult) {
@@ -521,16 +572,16 @@ export const calculateCR = ({
 
     const aux = [
         {
-            obj: minAPR,
-            rec: "Menor CAE",
+            obj: minInstallment,
+            rec: "Menor Cuota",
         },
         {
             obj: minTCC,
             rec: "Menor CTC",
         },
         {
-            obj: minInstallment,
-            rec: "Menor Cuota",
+            obj: minAPR,
+            rec: "Menor CAE",
         }
     ];
 

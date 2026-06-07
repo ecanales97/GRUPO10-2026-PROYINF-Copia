@@ -1,12 +1,11 @@
 import express from "express";
-import { register, login, getMe } from "../controllers/auth.js";
-import { verifyToken } from "../middlewares/authMiddleware.js";
+import { register, login, logout, refresh } from "../controllers/auth.js";
 
 const router = express.Router();
 
 router.post("/register", register);
 router.post("/login", login);
-
-router.get("/me", verifyToken, getMe);
+router.post("/logout", logout);
+router.post("/refresh", refresh);
 
 export { router };

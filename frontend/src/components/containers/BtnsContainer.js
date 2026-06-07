@@ -7,7 +7,7 @@ import Surface from "./Surface";
  * 
  * - retorna el contenedor
 */
-const BtnsContainer = ({ children, bottomPosition = false, minWidthRow = 768, className = "", ...props }) => {
+const BtnsContainer = ({ children, bottomPosition = false, minWidthRow = 768, className = "", invertPosition = false, ...props }) => {
     const [isColumn, setIsColumn] = useState(window.innerWidth < minWidthRow);
 
     useEffect(() => {
@@ -20,20 +20,23 @@ const BtnsContainer = ({ children, bottomPosition = false, minWidthRow = 768, cl
     }, [minWidthRow]);
 
     const childrenArray = React.Children.toArray(children);
-    const total = childrenArray.length;
+    // const total = childrenArray.length;
 
-    const fixedChildren = childrenArray.map((child, index) => {
-        let extraClass = "";
+    const fixedChildren = childrenArray.map((
+        child,
+        // index
+    ) => {
+        // let extraClass = "";
 
-        if (isColumn && total > 1) {
-            if (index === 0) extraClass = "btn-rounded-top";
-            else if (index === total - 1) extraClass = "btn-rounded-bottom";
-            else extraClass = "btn-rounded-middle";
-        }
+        // if (isColumn && total > 1) {
+        //     if (index === 0) extraClass = "btn-rounded-top";
+        //     else if (index === total - 1) extraClass = "btn-rounded-bottom";
+        //     else extraClass = "btn-rounded-middle";
+        // }
 
         return React.cloneElement(child, {
-            className: `
-                ${child.props.className || ""} ${extraClass}`.trim(),
+            // className: `
+            //     ${child.props.className || ""} ${extraClass}`.trim(),
             style:isColumn ? {} : {
                 width: "fit-content"
             }
@@ -42,7 +45,7 @@ const BtnsContainer = ({ children, bottomPosition = false, minWidthRow = 768, cl
 
     return (
         <div
-            className={`d-flex w-100 flex-row-reverse ${bottomPosition ? "rounded-2 p-3" : ""}`}
+            className={`d-flex w-100 ${invertPosition ? "flex-row" : "flex-row-reverse"} ${bottomPosition ? "rounded-2 p-3" : ""}`}
             style={ bottomPosition ? {
                 maxWidth: "100vw",
                 position: "fixed",

@@ -70,20 +70,10 @@ const Navbar = () => {
                     {
                         title: user.nickname,
                         elements: [
-                            {
-                                title: "Perfil",
-                                elements: [
-                                    { title: "Configurar" },
-                                    { title: "Ver mis simulaciones", to: PATH.history.build() },
-                                    { title: "Ver mis solicitudes" },
-                                    {
-                                        title: "Acciones",
-                                        elements: [
-                                            { title: "Cerrar Sesión", onClick: logout }
-                                        ]
-                                    }
-                                ]
-                            },
+                            { title: PATH.profile.label, to: PATH.profile.build() },
+                            { title: PATH.settings.label, to: PATH.settings.build() },
+                            { title: PATH.simulations.label, to: PATH.simulations.build() },
+                            { title: "Mis solicitudes" },
                             {
                                 title: "Mis creditos",
                                 elements: [
@@ -91,6 +81,7 @@ const Navbar = () => {
                                     { title: "Cuotas pendientes" }
                                 ]
                             },
+                            { title: "Cerrar Sesión", onClick: logout },
                         ]
                     },
                 ]

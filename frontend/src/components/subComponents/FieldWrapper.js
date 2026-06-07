@@ -26,7 +26,7 @@ const FieldWrapper = ({
                         <Span>
                             {label}
                             {required && 
-                                <Span className="text-danger">
+                                <Span className="ms-1 ibm-plex-mono-regular text-danger">
                                     *
                                 </Span>
                             }

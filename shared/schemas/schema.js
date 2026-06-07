@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const VALID_FILE_TYPES = [
+    "image/png",
+    "image/jpeg",
+    "application/pdf",
+];
+
 export const parseMoneyString = (value) => (value) && value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 const parseMoneyStringMoney = (value) => (value) && '$ ' + parseMoneyString(value);
@@ -33,6 +39,20 @@ const getFirstPaymentDates = (minMonths = 1, maxMonths = 3) => {
     minDateFixed.setDate(minDate.getDate() - 1);
 
     return { minDate, maxDate, minDateFixed };
+};
+
+export const zodSelectField = (options, messages = {}) => {
+    const {
+        required = "Debes seleccionar una opción.",
+        invalid = "El valor seleccionado no es válido.",
+    } = messages;
+
+    return z.string()
+        .min(1, required)
+        .refine(
+            (val) => !options?.length || options.some(opt => opt.value === val),
+            invalid
+        );
 };
 
 // VALIDATIONS
@@ -120,7 +140,7 @@ export const validations = {
                 )
         ),
 
-    income: () =>
+    income: ({ options } = {}) =>
         z.preprocess(
             cleanNumber,
             z.coerce.number({
@@ -128,7 +148,24 @@ export const validations = {
                 invalid_type_error: "La renta no es valida.",
             })
                 .min(0, "Debes ingresar tu renta."),
+            zodSelectField(options, { required: "Debes seleccionar un ingreso valido." }),
         ),
+
+    monthlyIncome: () =>
+        z.preprocess(
+            cleanNumber,
+            z.coerce.number({
+                required_error: "Debes ingresar tu ingreso.",
+                invalid_type_error: "El ingreso no es valido.",
+            })
+                .min(0, "Debes ingresar tu ingreso.")
+        ),
+
+    incomeType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un tipo de ingreso." }),
+
+    isRecurring: () =>
+        z.boolean(),
 
     termMonthly: ({ min , max } = {}) =>
         z.preprocess(
@@ -202,41 +239,19 @@ export const validations = {
                 )
         ),
     
-    propertyType: () =>
-        z.string()
-            .min(1, "Debes seleccionar un tipo de propiedad."),
+    propertyType: ({ options } = {}) =>
+        zodSelectField(options),
     
-    rateType: () =>
-        z.string()
-            .min(1, "Debes seleccionar un tipo de tasa."),
+    rateType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un tipo de tasa." }),
     
-    downPayment: ({ min, max } = {}) =>
+    downPayment: () =>
         z.preprocess(
             cleanNumber,
-            [
-                min !== undefined &&
-                    ((schema) =>
-                        schema.min(
-                            min,
-                            `Ingresa un monto superior a ${parseMoneyStringMoney(min)}.`
-                        )),
-
-                max !== undefined &&
-                    ((schema) =>
-                        schema.max(
-                            max,
-                            `Ingresa un monto inferior a ${parseMoneyStringMoney(max)}.`
-                        )),
-            ]
-                .filter(Boolean)
-                .reduce(
-                    (schema, fn) =>
-                        fn(schema),
-                    z.coerce.number({
-                        required_error: "Debes ingresar un monto.",
-                        invalid_type_error: "El monto no es valido.",
-                    })
-                )
+            z.coerce.number({
+                required_error: "Debes ingresar un monto.",
+                invalid_type_error:"El monto no es válido.",
+            })
         ),
     
     useSimplePersonalInformation: () =>
@@ -244,11 +259,11 @@ export const validations = {
     
     birthDate: () =>
         z.string({
-            required_error: "La fecha de nacimiento es obligatoria",
+            required_error: "La fecha de nacimiento es obligatoria.",
         })
         .nonempty("La fecha de nacimiento es obligatoria")
         .refine((value) => !isNaN(new Date(value).getTime()), {
-            message: "Fecha inválida",
+            message: "Fecha inválida.",
         })
         .refine((value) => {
             const today = new Date();
@@ -266,13 +281,14 @@ export const validations = {
             message: "Debes ser mayor de 18 años",
         }),
     
-    maritalStatus: () =>
-        z.string()
-            .min(1, "Debes seleccionar tu estado civil."),
+    maritalStatus: ({ options } = {}) =>
+        zodSelectField(options),
     
-    jobs: () =>
-        z.string()
-            .min(1, "Debes seleccionar tu tipo de trabajo."),
+    jobType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar tu ocupación." }),
+    
+    contractType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar el tipo de contrato." }),
 
     salary: () =>
         z.preprocess(
@@ -300,9 +316,8 @@ export const validations = {
             message: "La fecha no puede ser futura.",
         }),
     
-    assetType: () =>
-        z.string()
-            .min(1, "Debes seleccionar un tipo de activo."),
+    assetType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un tipo de activo." }),
     
     assetValue: () =>
         z.preprocess(
@@ -313,6 +328,193 @@ export const validations = {
             })
             .min(1, "Debes ingresar un valor válido."),
         ),
+
+    ownershipPercentage: () =>
+        z.preprocess(
+            cleanNumber,
+            z.coerce.number()
+                .min(1, "El porcentaje mínimo es 1%.")
+                .max(100, "El porcentaje no puede exceder el 100%."),
+        ),
+
+    source: () =>
+        z.any()
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                file instanceof File,
+            {
+                message:
+                    "Debe seleccionar un archivo válido.",
+            }
+        )
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                VALID_FILE_TYPES.includes(file.type),
+            {
+                message:
+                    "Formato inválido, debe ser png, jpeg o pdf.",
+            }
+        )
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                file.size <= 10 * 1024 * 1024,
+            {
+                message:
+                    "El archivo no puede pesar más de 10MB.",
+            }
+        ),
+        
+    sourceRequired: () =>
+        z.instanceof(File, {
+            message: "Debe seleccionar un archivo.",
+        })
+        .refine((file) => file.size > 0, {
+            message: "Archivo inválido.",
+        })
+        .refine(
+            (file) => VALID_FILE_TYPES.includes(file.type),
+            {
+                message: "Formato inválido, debe ser png, jpeg o pdf.",
+            }
+        )
+        .refine(
+            (file) => file.size <= 10 * 1024 * 1024,
+            {
+                message: "El archivo no puede pesar más de 10MB.",
+            }
+        ),
+
+    document: () =>
+        z.any()
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                file instanceof File ||
+                file?.uploaded === true,
+            {
+                message:
+                    "Debe seleccionar un archivo válido.",
+            }
+        )
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                file?.uploaded === true ||
+                VALID_FILE_TYPES.includes(file.type),
+            {
+                message:
+                    "Formato inválido, debe ser png, jpeg o pdf.",
+            }
+        )
+        .refine(
+            (file) =>
+                file == null ||
+                file === "" ||
+                file.size <= 10 * 1024 * 1024,
+            {
+                message:
+                    "El archivo no puede pesar más de 10MB.",
+            }
+        ),
+    
+    documentRequired: () =>
+        z.instanceof(File, {
+            message: "Debe seleccionar un archivo.",
+        })
+        .refine((file) => file.size > 0, {
+            message: "Archivo inválido.",
+        })
+        .refine(
+            (file) => VALID_FILE_TYPES.includes(file.type),
+            {
+                message: "Formato inválido, debe ser png, jpeg o pdf.",
+            }
+        )
+        .refine(
+            (file) => file.size <= 10 * 1024 * 1024,
+            {
+                message: "El archivo no puede pesar más de 10MB.",
+            }
+        ),
+    
+    documentBackend: () =>
+        z.union([
+            z.object({
+                uploaded: z.literal(true),
+                url: z.string(),
+                name: z.string(),
+            }),
+            z.literal(""),
+            z.null(),
+        ]).optional(),
+
+    documentRequiredBackend: () =>
+        z.object({
+            uploaded: z.literal(true),
+            url: z.string().min(1),
+            name: z.string().min(1),
+        }, {
+            required_error: "Debe seleccionar un archivo.",
+            invalid_type_error: "Debe seleccionar un archivo.",
+        }),
+    
+    documentCategory: () =>
+        z.string()
+            .min(1, "Categoría de documento incompleta.")
+            .max(100, "Categoría de documento demasiado larga."),
+
+    select: ({ options } = {}) =>
+        zodSelectField(options),
+
+    string: () =>
+        z.string()
+            .min(1, "Campo incompleto."),
+    
+    bankId: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un banco." }),
+
+    paymentMethodType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un tipo de método de pago." }),
+
+    disbursementMethodType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar un tipo de desembolso." }),
+
+    brandType: ({ options } = {}) =>
+        zodSelectField(options, { required: "Debes seleccionar una marca." }),
+
+    holderName: () =>
+        z.string()
+            .min(1, "El nombre del titular es obligatorio.")
+            .max(100, "El nombre del titular es demasiado largo."),
+
+    last4: () =>
+        z.string()
+            .regex(/^\d{4}$/, "Los últimos 4 dígitos deben ser 4 números."),
+
+    alias: () =>
+        z.string()
+            .min(1, "Alias incompleto.")
+            .max(50, "El alias es demasiado largo."),
+
+    address: () =>
+        z.string()
+            .min(1, "Ingresa tu dirección"),
+
+    city: () =>
+        z.string()
+            .min(1, "Ingresa tu comuna"),
+
+    state: () =>
+        z.string()
+            .min(1, "Ingresa tu región"),
 };
 
 export const objectValidations = {
@@ -325,16 +527,38 @@ export const objectValidations = {
             }
         ),
     useSimplePersonalInformation: () => (schema) =>
-        schema.refine(
-            ({ nationalId, useSimplePersonalInformation }) =>
-                nationalId === ""
-                    ? true
-                    : useSimplePersonalInformation,
-            {
-                message: "Debes confirmar el uso de información personal.",
-                path: ["useSimplePersonalInformation"]
+        schema.superRefine((data, ctx) => {
+            const useSimple = !!data.useSimplePersonalInformation;
+            const nationalId = data.nationalId;
+
+            const hasNationalId =
+                nationalId !== undefined &&
+                nationalId !== null &&
+                nationalId !== "" &&
+                String(nationalId).trim() !== "";
+
+            if (!("nationalId" in data) || nationalId === undefined) {
+                if (!useSimple) {
+                    ctx.addIssue({
+                        path: ["useSimplePersonalInformation"],
+                        message: "Debes confirmar el uso de información personal."
+                    });
+                }
+                return;
             }
-        ),
+            if (useSimple && !hasNationalId) {
+                ctx.addIssue({
+                    path: ["nationalId"],
+                    message: "Rut requerido si confirmas uso de información personal."
+                });
+            }
+            if (hasNationalId && !useSimple) {
+                ctx.addIssue({
+                    path: ["useSimplePersonalInformation"],
+                    message: "Debes confirmar el uso de información personal."
+                });
+            }
+        }),
     downPayment: ({ min, max }) => (schema) =>
         schema.refine(
             ({ itemValue, downPayment }) => {
@@ -346,7 +570,23 @@ export const objectValidations = {
                 message: `El pie debe estar entre ${Math.round(min * 100)}% y ${Math.round(max * 100)}% del valor de la propiedad.`,
                 path: ["downPayment"]
             }
-        )
+        ),
+    newPassword: () => (schema) =>
+        schema.refine(
+            ({ password, currentPassword }) => password !== currentPassword,
+            {
+                message: "La contraseña nueva no puede ser igual a la actual.",
+                path: ["password"]
+            }
+        ),
+    newConfirmPassword: () => (schema) =>
+        schema.refine(
+            ({ newPassword, confirmPassword }) => newPassword === confirmPassword,
+            {
+                message: "Las contraseñas no coinciden.",
+                path: ["confirmPassword"]
+            }
+        ),
 }
 
 const today = getToday();

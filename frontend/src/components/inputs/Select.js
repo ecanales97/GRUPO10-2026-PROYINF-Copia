@@ -111,10 +111,10 @@ const Select = ({
     textHelp,
     value,
     onChange,
-    onBlur,
     className = "",
     errors = {},
     touched = {},
+    ...props
 }) => {
     const rsOptions = options.map(opt => ({
         value: opt.value,
@@ -122,19 +122,8 @@ const Select = ({
     }));
     const selectedOption = rsOptions.find(opt => opt.value === value) || null;
     const handleChange = (selected) => {
-        onChange({
-            target: {
-                name,
-                value: selected ? selected.value : ""
-            }
-        });
-    };
-    const handleBlur = () => {
-        onBlur({
-            target: {
-                name
-            }
-        });
+        console.log(selected?.value);
+        onChange(selected?.value ?? "");
     };
 
     return (
@@ -155,12 +144,12 @@ const Select = ({
                     isSearchable={false}
                     value={selectedOption}
                     onChange={handleChange}
-                    onBlur={handleBlur}
                     placeholder={placeholder}
                     classNamePrefix="react-select"
                     className={`${hasError ? "is-invalid" : ""} ${className}`}
                     // isClearable
                     styles={bootstrapSelectStyles(hasError)}
+                    {...props}
                 />
             )}
         </FieldWrapper>

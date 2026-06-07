@@ -33,10 +33,10 @@ const mortgageSimulationSchema = z.object({
     income: validations.income(),
 
     itemValue: validations.propertyValue(),
-    itemType: validations.propertyType(),
+    itemTypeId: validations.propertyType({ options:CREDITS_CONFIG.mortgage.creditItems }),
     downPayment: validations.downPayment(),
     termMonthly: validations.termMonthly(CREDITS_CONFIG.mortgage.term),
-    rateType: validations.rateType(),
+    rateTypeId: validations.rateType({ options:CREDITS_CONFIG.mortgage.rateTypes }),
     firstPaymentDate: validations.firstPaymentDate(CREDITS_CONFIG.mortgage.gracePeriodMonths),
 });
 
@@ -90,7 +90,7 @@ export const simulation = async (
         }
         const parsed = schema.safeParse(simulationData);
         if (!parsed.success) {
-            console.log(parsed.error);
+            // console.log(parsed.error);
             return res.status(400).json({
                 error:
                     "Datos inválidos.",
@@ -132,7 +132,10 @@ export const simulation = async (
                 income: data.income,
 
                 itemValue: data.itemValue,
+                itemTypeId: data.itemTypeId,
                 downPayment: data.downPayment,
+
+                rateTypeId: data.rateTypeId,
 
                 firstPaymentDate: data.firstPaymentDate,
 
@@ -148,7 +151,10 @@ export const simulation = async (
                 income: data.income,
 
                 itemValue: data.itemValue,
+                itemTypeId: data.itemTypeId,
                 downPayment: data.downPayment,
+
+                rateTypeId: data.rateTypeId,
 
                 firstPaymentDate: data.firstPaymentDate,
 

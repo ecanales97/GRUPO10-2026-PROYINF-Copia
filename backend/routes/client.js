@@ -1,66 +1,75 @@
 import express from "express";
+
 import {
+    // CLIENT DATA
+    getMeAll,
+
+    // CLIENT
     getClient,
-    updateClient,
     deleteClient,
+
+    // CONFIG
+    updateClientIdentity,
+    updateClientContact,
+    updateClientPassword,
 
     // INCOME
     getClientIncome,
-    createClientIncome,
-    updateClientIncome,
     deleteClientIncome,
 
     // EMPLOYMENT
     getClientEmployment,
-    createClientEmployment,
-    updateClientEmployment,
     deleteClientEmployment,
 
     // ASSETS
     getClientAssets,
-    createClientAsset,
-    updateClientAsset,
     deleteClientAsset,
 
-    // LIABILITIES
-    getClientLiabilities,
-    createClientLiability,
-    updateClientLiability,
-    deleteClientLiability
+    // PAYMENT
+    getClientPaymentMethods,
+    deleteClientPaymentMethod,
+
+    // DISBURSMENT
+    getClientDisbursementMethods,
+    deleteClientDisbursementMethod,
 
 } from "../controllers/client.js";
 
 import { verifyToken } from "../middlewares/authMiddleware.js";
+import { confirmPassword } from "../middlewares/confirmPasswordMiddleware.js";
 
 const router = express.Router();
 
+// CLIENT DATA
+router.get("/all", verifyToken, getMeAll);
+
 // CLIENT
-router.get("/me", verifyToken, getClient);
-router.patch("/me", verifyToken, updateClient);
-router.delete("/me", verifyToken, deleteClient);
+router.get("/", verifyToken, getClient);
+router.delete("/", verifyToken, confirmPassword, deleteClient);
+
+// CONFIG
+router.patch("/identity", verifyToken, confirmPassword, updateClientIdentity);
+router.patch("/contact", verifyToken, confirmPassword, updateClientContact);
+router.patch("/password", verifyToken, confirmPassword, updateClientPassword);
 
 // INCOME
 router.get("/income", verifyToken, getClientIncome);
-router.post("/income", verifyToken, createClientIncome);
-router.patch("/income/:id", verifyToken, updateClientIncome);
 router.delete("/income/:id", verifyToken, deleteClientIncome);
 
 // EMPLOYMENT
 router.get("/employment", verifyToken, getClientEmployment);
-router.post("/employment", verifyToken, createClientEmployment);
-router.patch("/employment/:id", verifyToken, updateClientEmployment);
 router.delete("/employment/:id", verifyToken, deleteClientEmployment);
 
 // ASSETS
 router.get("/assets", verifyToken, getClientAssets);
-router.post("/assets", verifyToken, createClientAsset);
-router.patch("/assets/:id", verifyToken, updateClientAsset);
 router.delete("/assets/:id", verifyToken, deleteClientAsset);
 
-// LIABILITIES
-router.get("/liabilities", verifyToken, getClientLiabilities);
-router.post("/liabilities", verifyToken, createClientLiability);
-router.patch("/liabilities/:id", verifyToken, updateClientLiability);
-router.delete("/liabilities/:id", verifyToken, deleteClientLiability);
+// PAYMENT
+router.get("/payment", verifyToken, getClientPaymentMethods);
+router.delete("/payment/:id", verifyToken, deleteClientPaymentMethod);
+
+// DISBURSMENT
+router.get("/disbursment", verifyToken, getClientDisbursementMethods);
+router.delete("/disbursment/:id", verifyToken, deleteClientDisbursementMethod);
 
 export { router };

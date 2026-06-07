@@ -7,7 +7,7 @@
  * - retorna el string como numero.
  * 
  */
-export const parseMoneyNumber = (value) => (value) && Number(value.toString().replace(/\D/g, ''));
+export const parseMoneyNumber = (value) => (value !== undefined || value !== null) && Number(String(value).replace(/\D/g, ''));
 
 /**
  * formatea un numero (`value`) a un formato string.
@@ -17,7 +17,7 @@ export const parseMoneyNumber = (value) => (value) && Number(value.toString().re
  * - `value` - el valor (numero) a formatear.
  * - retorna el valor formateado.
  */
-export const parseMoneyString = (value) => (value) && value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+export const parseMoneyString = (value) => (value !== undefined || value !== null) && String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 /**
  * formatea un numero (`value`) a un formato string bonito (xD).
@@ -28,7 +28,7 @@ export const parseMoneyString = (value) => (value) && value.toString().replace(/
  * - retorna el valor formateado.
  * 
  */
-export const parseMoneyStringMoney = (value) => (value) && '$ ' + parseMoneyString(value);
+export const parseMoneyStringMoney = (value) => (value !== undefined || value !== null) && '$ ' + parseMoneyString(value);
 
 /**
  * formatea un rut, para que tenga el formato correcto.
@@ -57,3 +57,13 @@ export const parseRut = (rut) => {
     }
     return aux + '-' + dv;
 }
+
+export const parseDateString = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleDateString();
+};
+
+export const parseTimestampString = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleString();
+};

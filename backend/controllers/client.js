@@ -1,607 +1,625 @@
 import { db } from "../utils/db.js";
+import { getClientDataByUserId } from "../utils/getData.js";
+import { validations, objectValidations } from "../shared/schemas/schema.js";
+import { prepareDocument, commitDocument, deleteDocument } from "../utils/documents.js";
+import { validate, validateUniqueEmail } from "../utils/validateData.js";
+import { getById, getByCode, getOptions } from "../utils/cache.js";
+import bcrypt from "bcrypt";
 
-// CLIENT
-
-export const getClient = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-
-        const { rows } = await db.query(`
-            SELECT 
-                c.id,
-                c.nationalId,
-                c.birthDate,
-                c.maritalStatusId
-            FROM clients c
-            WHERE c.userId = $1
-            AND c.deletedAt IS NULL
-        `, [userId]);
-
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const updateClient = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-        const {
-            nationalId,
-            maritalStatusId,
-            birthDate
-        } = req.body;
-
-        const { rows } = await db.query(`
-            UPDATE clients c
-            SET
-                maritalStatusId = COALESCE($1, c.maritalStatusId),
-                birthDate = COALESCE($2, c.birthDate),
-                updatedAt = NOW()
-            WHERE c.userId = $3
-            AND c.deletedAt IS NULL
-            RETURNING c.*
-        `, [maritalStatusId, birthDate, userId]);
-
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const deleteClient = async (req, res) => {
+// DB
+const withDb = async (externalDb, fn, { transaction = true } = {}) => {
+    if (externalDb) return fn(externalDb);
     const client = await db.connect();
-
     try {
-        const userId = req.user.sub;
-
-        await client.query("BEGIN");
-
-        const { rowCount: clientCount } = await client.query(`
-            UPDATE clients
-            SET deletedAt = NOW()
-            WHERE userId = $1
-            AND deletedAt IS NULL
-        `, [userId]);
-
-        if (clientCount === 0) {
-            await client.query("ROLLBACK");
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        await client.query(`
-            UPDATE users
-            SET deletedAt = NOW()
-            WHERE id = $1
-            AND deletedAt IS NULL
-        `, [userId]);
-
-        await client.query("COMMIT");
-
-        return res.json({ message: "Cliente eliminado" });
-
+        if (transaction) await client.query("BEGIN");
+        const result = await fn(client);
+        if (transaction) await client.query("COMMIT");
+        return result;
     } catch (err) {
-        await client.query("ROLLBACK");
-        return res.status(500).json({ error: err.message });
+        if (transaction) await client.query("ROLLBACK");
+        throw err;
     } finally {
         client.release();
     }
 };
 
+const notFound = (label) =>
+    Object.assign(new Error(`${label} no encontrado o no pertenece al usuario`), { status: 404 });
+
+// CACHE
+const resolveStateId = async (code) => {
+    const s = await getByCode("verificationStates", code);
+    if (!s) throw new Error(`verificationState '${code}' no encontrado en cache`);
+    return s.id;
+};
+
+const resolveSourceId = async (code) => {
+    const s = await getByCode("clientDataSources", code);
+    if (!s) throw new Error(`clientDataSource '${code}' no encontrado en cache`);
+    return s.id;
+};
+
+// DOCUMENT
+const insertDocument = async (fileField, category, { clientId, applicationId } = {}, verificationStateId, dbConn, metadata = null) => {
+    if (!fileField) return { id: null, prepared: null };
+
+    const prepared   = await prepareDocument(fileField, category, { clientId, applicationId });
+    const isVerified = verificationStateId === await resolveStateId("VERIFIED");
+
+    const { rows } = await dbConn.query(`
+        INSERT INTO documents (clientId, applicationId, documentTypeId, sourceId, url, verificationStateId, verifiedAt, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
+    `, [prepared.clientId, prepared.applicationId, prepared.documentTypeId, prepared.sourceId, prepared.url, verificationStateId, isVerified ? new Date() : null, metadata ? JSON.stringify(metadata) : null]);
+
+    return { id: rows[0].id, prepared };
+};
+
+// VERIFICATION
+const resolveVerification = (parsed, scan, fields, formData = {}) => {
+    const explicitSource = formData?.sourceCode ?? formData?.source ?? formData?.documentSource ?? null;
+    const explicitState  = formData?.verificationState ?? formData?.stateCode ?? formData?.state ?? null;
+
+    const sourceCode = explicitSource ? String(explicitSource).toUpperCase() : (scan ? "DOCUMENT" : "MANUAL");
+    const stateCode  = explicitState ? String(explicitState).toUpperCase() : "PENDING";
+
+    return { stateCode, sourceCode };
+};
+
+// ENRICH
+const pickRef = (obj, fields) =>
+    Object.fromEntries(fields.filter((f) => f in obj).map((f) => [f, obj[f]]));
+
+const enrichRows = async (rows, { hasSource, hasDocument, hasVerificationState }, dbConn) => {
+    if (!rows.length) return rows;
+
+    let docsById = {};
+    if (hasDocument) {
+        const ids = [...new Set(rows.map((r) => r.documentid).filter(Boolean))];
+        if (ids.length) {
+            const { rows: docRows } = await (dbConn ?? db).query(`
+                SELECT d.id, d.url, d.sourceid, d.documenttypeid, d.verifiedat, d.updatedat, d.createdat
+                FROM documents d WHERE d.id = ANY($1) AND d.deletedat IS NULL
+            `, [ids]);
+            for (const d of docRows) docsById[d.id] = d;
+        }
+    }
+
+    return Promise.all(rows.map(async (row) => {
+        const out = { ...row };
+
+        if (hasSource && !row.documentid) {
+            const src = await getById("clientDataSources", row.sourceid);
+            out.source = src ? pickRef(src, ["id", "code", "name"]) : null;
+        }
+        delete out.sourceid;
+
+        if (hasDocument) {
+            const doc = row.documentid ? docsById[row.documentid] : null;
+            out.document = doc ? {
+                id:             doc.id,
+                url:            doc.url,
+                documentType:   pickRef(await getById("documentTypes",   doc.documenttypeid) ?? {}, ["id", "code", "name"]),
+                documentSource: pickRef(await getById("documentSources", doc.sourceid)       ?? {}, ["id", "code", "name"]),
+                verifiedAt:     doc.verifiedat,
+                updatedAt:      doc.updatedat,
+                createdAt:      doc.createdat,
+            } : null;
+            delete out.documentid;
+        }
+
+        if (hasVerificationState) {
+            const vs = await getById("verificationStates", row.verificationstateid);
+            out.verificationState = vs ? pickRef(vs, ["id", "code", "name"]) : null;
+            delete out.verificationstateid;
+        }
+
+        return out;
+    }));
+};
+
+// GENERIC HANDLERS
+const genericGet = (table, alias, enrichConfig) => async (req, res) => {
+    try {
+        const { rows } = await (req.dbClient ?? db).query(`
+            SELECT ${alias}.* FROM ${table} ${alias}
+            JOIN clients c ON c.id = ${alias}.clientId
+            WHERE c.userId = $1 AND ${alias}.deletedAt IS NULL
+        `, [req.user.sub]);
+        return res.json(await enrichRows(rows, enrichConfig, req.dbClient));
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+const genericDelete = (table, alias, label) => async (req, res) => {
+    try {
+        const { rowCount } = await (req.dbClient ?? db).query(`
+            UPDATE ${table} ${alias} SET deletedAt = NOW()
+            FROM clients c
+            WHERE ${alias}.id = $1 AND ${alias}.clientId = c.id AND c.userId = $2 AND ${alias}.deletedAt IS NULL
+        `, [req.params.id, req.user.sub]);
+        if (rowCount === 0) throw notFound(label);
+        return res.json({ message: `${label} eliminado` });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+const genericDeleteWithDocument = (table, alias, label) => async (req, res) => {
+    let docUrl = null;
+    try {
+        await withDb(req.dbClient, async (dbConn) => {
+            const { rows } = await dbConn.query(`
+                SELECT d.url FROM ${table} ${alias}
+                JOIN clients c ON c.id = ${alias}.clientId
+                LEFT JOIN documents d ON d.id = ${alias}.documentId
+                WHERE ${alias}.id = $1 AND c.userId = $2 AND ${alias}.deletedAt IS NULL
+            `, [req.params.id, req.user.sub]);
+
+            if (!rows.length) throw notFound(label);
+            docUrl = rows[0].url ?? null;
+
+            await dbConn.query(`
+                UPDATE ${table} ${alias} SET deletedAt = NOW()
+                FROM clients c
+                WHERE ${alias}.id = $1 AND ${alias}.clientId = c.id AND c.userId = $2 AND ${alias}.deletedAt IS NULL
+            `, [req.params.id, req.user.sub]);
+
+            if (docUrl) await dbConn.query(
+                `UPDATE documents SET deletedAt = NOW() WHERE url = $1`, [docUrl]
+            );
+            
+            if (docUrl) deleteDocument(docUrl);
+        });
+
+        return res.json({ message: `${label} eliminado` });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+// ALL
+export const getMeAll = async (req, res) => {
+    try {
+        const user = await getClientDataByUserId(req.user.sub);
+        if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+        return res.json(user);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+};
+
+// CLIENT
+export const getClient = async (req, res) => {
+    try {
+        const { rows } = await db.query(`
+            SELECT c.id, c.nationalId, c.birthDate, c.maritalStatusId
+            FROM clients c WHERE c.userId = $1 AND c.deletedAt IS NULL
+        `, [req.user.sub]);
+        if (!rows.length) return res.status(404).json({ error: "Cliente no encontrado" });
+        return res.json(rows[0]);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+};
+
+// IDENTITY
+export const updateClientIdentity = async (req, res) => {
+    try {
+        const formData     = req.formData ?? req.body ?? {};
+        const incomingKeys = new Set(Object.keys(formData));
+
+        const parsed = validate({
+            name:            validations.name().optional(),
+            nickname:        validations.nickname().optional(),
+            birthDate:       validations.birthDate().optional(),
+            maritalStatusId: validations.select(await getOptions("clientMaritalStatus")).optional(),
+        }, formData);
+
+        const pick = (obj) => Object.fromEntries(Object.entries(obj).filter(([k]) => incomingKeys.has(k)));
+        const { name, nickname, birthDate, maritalStatusId } = pick(parsed);
+
+        const result = await withDb(req.dbClient, async (dbConn) => {
+            const { rows: u } = await dbConn.query(`
+                UPDATE users SET name = COALESCE($1, name), nickname = COALESCE($2, nickname), updatedAt = NOW()
+                WHERE id = $3 AND deletedAt IS NULL RETURNING id, name, nickname
+            `, [name ?? null, nickname ?? null, req.user.sub]);
+            if (!u.length) throw Object.assign(new Error("Usuario no encontrado"), { status: 404 });
+
+            const { rows: c } = await dbConn.query(`
+                UPDATE clients SET birthDate = COALESCE($1, birthDate), maritalStatusId = COALESCE($2, maritalStatusId), updatedAt = NOW()
+                WHERE userId = $3 AND deletedAt IS NULL RETURNING birthDate, maritalStatusId
+            `, [birthDate ?? null, maritalStatusId ?? null, req.user.sub]);
+
+            return { ...u[0], ...c[0] };
+        });
+
+        return res.json(result);
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+// CONTACT
+export const updateClientContact = async (req, res) => {
+    try {
+        const formData     = req.formData ?? req.body ?? {};
+        const incomingKeys = new Set(Object.keys(formData));
+
+        const parsed = validate({
+            email: validations.email().optional(),
+            phone: validations.phone().optional(),
+        }, formData);
+
+        const { email, phone } = Object.fromEntries(Object.entries(parsed).filter(([k]) => incomingKeys.has(k)));
+
+        if (email) await validateUniqueEmail(email, req.user.sub);
+
+        const { rows } = await db.query(`
+            UPDATE users SET email = COALESCE($1, email), phone = COALESCE($2, phone), updatedAt = NOW()
+            WHERE id = $3 AND deletedAt IS NULL RETURNING id, email, phone
+        `, [email ?? null, phone ?? null, req.user.sub]);
+
+        if (!rows.length) return res.status(404).json({ error: "Usuario no encontrado" });
+        return res.json(rows[0]);
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+// PASSWORD
+export const updateClientPassword = async (req, res) => {
+    try {
+        const { password } = validate({
+            password:        validations.password(),
+            confirmPassword: validations.confirmPassword(),
+        }, req.body, [objectValidations.newConfirmPassword()]);
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const { rows } = await db.query(`
+            UPDATE users SET passwordHash = $1, updatedAt = NOW()
+            WHERE id = $2 AND deletedAt IS NULL RETURNING id
+        `, [hashedPassword, req.user.sub]);
+
+        if (!rows.length) return res.status(404).json({ error: "Usuario no encontrado" });
+        return res.json({ message: "Contraseña actualizada" });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+// DELETE CLIENT
+export const deleteClient = async (req, res) => {
+    try {
+        const result = await withDb(req.dbClient, async (dbConn) => {
+            const { rowCount } = await dbConn.query(`
+                UPDATE clients SET deletedAt = NOW() WHERE userId = $1 AND deletedAt IS NULL
+            `, [req.user.sub]);
+            if (rowCount === 0) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+            await dbConn.query(`UPDATE users SET deletedAt = NOW() WHERE id = $1 AND deletedAt IS NULL`, [req.user.sub]);
+            return { message: "Cliente eliminado" };
+        });
+        return res.json(result);
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
 // INCOME
+const incomeEnrich     = { hasSource: true, hasDocument: true, hasVerificationState: true };
+const incomeScanFields = [
+    { key: "monthlyIncome", type: "num"    },
+    { key: "incomeTypeId",  type: "option" },
+];
 
-export const getClientIncome = async (req, res) => {
+export const getClientIncome    = genericGet("clientIncome", "ci", incomeEnrich);
+export const deleteClientIncome = genericDeleteWithDocument("clientIncome", "ci", "Ingreso");
+
+export const createClientIncome = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    let prepared = null;
     try {
-        const userId = req.user.sub;
+        return await withDb(externalDb, async (dbConn) => {
+            const parsed = validate({
+                monthlyIncome: validations.monthlyIncome(),
+                incomeTypeId:  validations.incomeType(await getOptions("incomeTypes")),
+                isRecurring:   validations.isRecurring().optional(),
+            }, formData);
 
-        const { rows } = await db.query(`
-            SELECT ci.*
-            FROM clientIncome ci
-            JOIN clients c ON c.id = ci.clientId
-            WHERE c.userId = $1
-            AND ci.deletedAt IS NULL
-        `, [userId]);
+            const { rows: cr } = await dbConn.query(
+                `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+            );
+            if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+            const clientId = cr[0].id;
 
-        return res.json(rows);
+            const { stateCode, sourceCode } = resolveVerification(parsed, formData.scan ?? null, incomeScanFields, formData);
+            const verificationStateId       = await resolveStateId(stateCode);
+            const sourceId                  = await resolveSourceId(sourceCode);
 
+            const { id: documentId, prepared: p } = await insertDocument(
+                formData.document ?? null, "INCOME_PROOF", { clientId }, verificationStateId, dbConn, formData.scan ?? null
+            );
+            prepared = p;
+
+            const { rows } = await dbConn.query(`
+                INSERT INTO clientIncome (clientId, monthlyIncome, incomeTypeId, isRecurring, sourceId, documentId, verificationStateId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+            `, [clientId, parsed.monthlyIncome, parsed.incomeTypeId, parsed.isRecurring ?? false, sourceId, documentId, verificationStateId]);
+
+            if (prepared) commitDocument(prepared);
+
+            const [enriched] = await enrichRows(rows, incomeEnrich, dbConn);
+            return enriched;
+        });
     } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const createClientIncome = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-        const { monthlyIncome, sourceId } = req.body;
-
-        if (!monthlyIncome || monthlyIncome <= 0) {
-            return res.status(400).json({
-                error: "Ingreso inválido"
-            });
-        }
-
-        const { rows: clientRows } = await db.query(`
-            SELECT id FROM clients WHERE userId = $1
-        `, [userId]);
-
-        if (!clientRows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        const clientId = clientRows[0].id;
-
-        const { rows } = await db.query(`
-            INSERT INTO clientIncome (clientId, monthlyIncome, sourceId)
-            VALUES ($1, $2, $3)
-            RETURNING *
-        `, [clientId, monthlyIncome, sourceId]);
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const updateClientIncome = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-        const { monthlyIncome, sourceId } = req.body;
-
-        if (monthlyIncome !== undefined && monthlyIncome <= 0) {
-            return res.status(400).json({
-                error: "Ingreso inválido"
-            });
-        }
-
-        const { rows } = await db.query(`
-            UPDATE clientIncome ci
-            SET 
-                monthlyIncome = COALESCE($1, ci.monthlyIncome),
-                sourceId = COALESCE($2, ci.sourceId),
-                updatedAt = NOW()
-            FROM clients c
-            WHERE ci.id = $3
-            AND ci.clientId = c.id
-            AND c.userId = $4
-            AND ci.deletedAt IS NULL
-            RETURNING ci.*
-        `, [monthlyIncome, sourceId, id, userId]);
-
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Ingreso no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const deleteClientIncome = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-
-        const { rowCount } = await db.query(`
-            UPDATE clientIncome ci
-            SET deletedAt = NOW()
-            FROM clients c
-            WHERE ci.id = $1
-            AND ci.clientId = c.id
-            AND c.userId = $2
-        `, [id, userId]);
-
-        if (rowCount === 0) {
-            return res.status(404).json({
-                error: "Ingreso no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json({ message: "Ingreso eliminado" });
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
+        if (prepared) deleteDocument(prepared.filepath);
+        throw err;
     }
 };
 
 // EMPLOYMENT
+const employmentEnrich     = { hasSource: true, hasDocument: true, hasVerificationState: true };
+const employmentScanFields = [
+    { key: "salary",         type: "num"    },
+    { key: "jobTypeId",      type: "option" },
+    { key: "contractTypeId", type: "option" },
+];
 
-export const getClientEmployment = async (req, res) => {
+export const getClientEmployment    = genericGet("clientEmployment", "ce", employmentEnrich);
+export const deleteClientEmployment = genericDeleteWithDocument("clientEmployment", "ce", "Empleo");
+
+export const createClientEmployment = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    let prepared = null;
     try {
-        const userId = req.user.sub;
+        return await withDb(externalDb, async (dbConn) => {
+            const parsed = validate({
+                jobTypeId:      validations.select(await getOptions("jobTypes")),
+                contractTypeId: validations.select(await getOptions("contractTypes")),
+                salary:         validations.salary(),
+                startDate:      validations.jobStartDate(),
+            }, formData);
 
-        const { rows } = await db.query(`
-            SELECT ce.*
-            FROM clientEmployment ce
-            JOIN clients c ON c.id = ce.clientId
-            WHERE c.userId = $1
-            AND ce.deletedAt IS NULL
-        `, [userId]);
+            const { rows: cr } = await dbConn.query(
+                `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+            );
+            if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+            const clientId = cr[0].id;
 
-        return res.json(rows);
+            const { stateCode, sourceCode } = resolveVerification(parsed, formData.scan ?? null, employmentScanFields, formData);
+            const verificationStateId       = await resolveStateId(stateCode);
+            const sourceId                  = await resolveSourceId(sourceCode);
 
+            const { id: documentId, prepared: p } = await insertDocument(
+                formData.document ?? null, "CONTRACT", { clientId }, verificationStateId, dbConn, formData.scan ?? null
+            );
+            prepared = p;
+
+            const { rows } = await dbConn.query(`
+                INSERT INTO clientEmployment (clientId, jobTypeId, contractTypeId, salary, startDate, sourceId, documentId, verificationStateId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+            `, [clientId, parsed.jobTypeId, parsed.contractTypeId, parsed.salary, parsed.startDate, sourceId, documentId, verificationStateId]);
+
+            if (prepared) commitDocument(prepared);
+
+            const [enriched] = await enrichRows(rows, employmentEnrich, dbConn);
+            return enriched;
+        });
     } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const createClientEmployment = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-        const { jobTypeId, salary, startDate, sourceId } = req.body;
-
-        if (!salary || salary <= 0) {
-            return res.status(400).json({
-                error: "Salario inválido"
-            });
-        }
-
-        const { rows: clientRows } = await db.query(`
-            SELECT id FROM clients WHERE userId = $1
-        `, [userId]);
-
-        if (!clientRows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        const clientId = clientRows[0].id;
-
-        const { rows } = await db.query(`
-            INSERT INTO clientEmployment (clientId, jobTypeId, salary, startDate, sourceId)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
-        `, [clientId, jobTypeId, salary, startDate, sourceId]);
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const updateClientEmployment = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-        const { jobTypeId, salary, startDate, sourceId } = req.body;
-
-        if (salary !== undefined && salary <= 0) {
-            return res.status(400).json({
-                error: "Salario inválido"
-            });
-        }
-
-        const { rows } = await db.query(`
-            UPDATE clientEmployment ce
-            SET 
-                jobTypeId = COALESCE($1, ce.jobTypeId),
-                salary = COALESCE($2, ce.salary),
-                startDate = COALESCE($3, ce.startDate),
-                sourceId = COALESCE($4, ce.sourceId),
-                updatedAt = NOW()
-            FROM clients c
-            WHERE ce.id = $5
-            AND ce.clientId = c.id
-            AND c.userId = $6
-            AND ce.deletedAt IS NULL
-            RETURNING ce.*
-        `, [jobTypeId, salary, startDate, sourceId, id, userId]);
-
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Empleo no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const deleteClientEmployment = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-
-        const { rowCount } = await db.query(`
-            UPDATE clientEmployment ce
-            SET deletedAt = NOW()
-            FROM clients c
-            WHERE ce.id = $1
-            AND ce.clientId = c.id
-            AND c.userId = $2
-        `, [id, userId]);
-
-        if (rowCount === 0) {
-            return res.status(404).json({
-                error: "Empleo no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json({ message: "Empleo eliminado" });
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
+        if (prepared) deleteDocument(prepared.filepath);
+        throw err;
     }
 };
 
 // ASSETS
+const assetEnrich     = { hasSource: true, hasDocument: true, hasVerificationState: true };
+const assetScanFields = [
+    { key: "value",               type: "num"    },
+    { key: "ownershipPercentage", type: "num"    },
+    { key: "assetTypeId",         type: "option" },
+];
 
-export const getClientAssets = async (req, res) => {
+export const getClientAssets   = genericGet("clientAssets", "ca", assetEnrich);
+export const deleteClientAsset = genericDeleteWithDocument("clientAssets", "ca", "Activo");
+
+export const createClientAsset = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    let prepared = null;
     try {
-        const userId = req.user.sub;
+        return await withDb(externalDb, async (dbConn) => {
+            const parsed = validate({
+                assetTypeId:         validations.select(await getOptions("assetTypes")),
+                value:               validations.assetValue(),
+                ownershipPercentage: validations.ownershipPercentage().optional(),
+                documentCategory:    validations.documentCategory().optional(),
+            }, formData);
 
-        const { rows } = await db.query(`
-            SELECT ca.*
-            FROM clientAssets ca
-            JOIN clients c ON c.id = ca.clientId
-            WHERE c.userId = $1
-            AND ca.deletedAt IS NULL
-        `, [userId]);
+            const { rows: cr } = await dbConn.query(
+                `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+            );
+            if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+            const clientId = cr[0].id;
 
-        return res.json(rows);
+            const category = parsed.documentCategory ?? "PROPERTY_APPRAISAL";
 
+            const { stateCode, sourceCode } = resolveVerification(parsed, formData.scan ?? null, assetScanFields, formData);
+            const verificationStateId       = await resolveStateId(stateCode);
+            const sourceId                  = await resolveSourceId(sourceCode);
+
+            const { id: documentId, prepared: p } = await insertDocument(
+                formData.document ?? null, category, { clientId }, verificationStateId, dbConn, formData.scan ?? null
+            );
+            prepared = p;
+
+            const { rows } = await dbConn.query(`
+                INSERT INTO clientAssets (clientId, assetTypeId, value, ownershipPercentage, sourceId, documentId, verificationStateId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+            `, [clientId, parsed.assetTypeId, parsed.value, parsed.ownershipPercentage ?? 100, sourceId, documentId, verificationStateId]);
+
+            if (prepared) commitDocument(prepared);
+
+            const [enriched] = await enrichRows(rows, assetEnrich, dbConn);
+            return enriched;
+        });
     } catch (err) {
-        return res.status(500).json({ error: err.message });
+        if (prepared) deleteDocument(prepared.filepath);
+        throw err;
     }
 };
 
-export const createClientAsset = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-        const { type, value, sourceId } = req.body;
+export const updateClientAsset = async ({ id, userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const incomingKeys = new Set(Object.keys(formData));
 
-        if (!value || value <= 0) {
-            return res.status(400).json({
-                error: "Valor inválido"
-            });
-        }
+        const parsed = validate({
+            assetTypeId:         validations.select(await getOptions("assetTypes")).optional(),
+            value:               validations.assetValue().optional(),
+            ownershipPercentage: validations.ownershipPercentage().optional(),
+        }, formData);
 
-        const { rows: clientRows } = await db.query(`
-            SELECT id FROM clients WHERE userId = $1
-        `, [userId]);
+        const p = Object.fromEntries(Object.entries(parsed).filter(([k]) => incomingKeys.has(k)));
 
-        if (!clientRows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        const clientId = clientRows[0].id;
-
-        const { rows } = await db.query(`
-            INSERT INTO clientAssets (clientId, type, value, sourceId)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `, [clientId, type, value, sourceId]);
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const updateClientAsset = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-        const { type, value, sourceId } = req.body;
-
-        if (value !== undefined && value <= 0) {
-            return res.status(400).json({
-                error: "Valor inválido"
-            });
-        }
-
-        const { rows } = await db.query(`
-            UPDATE clientAssets ca
-            SET 
-                type = COALESCE($1, ca.type),
-                value = COALESCE($2, ca.value),
-                sourceId = COALESCE($3, ca.sourceId),
-                updatedAt = NOW()
+        const { rows } = await dbConn.query(`
+            UPDATE clientAssets ca SET
+                assetTypeId         = COALESCE($1, ca.assetTypeId),
+                value               = COALESCE($2, ca.value),
+                ownershipPercentage = COALESCE($3, ca.ownershipPercentage),
+                updatedAt           = NOW()
             FROM clients c
-            WHERE ca.id = $4
-            AND ca.clientId = c.id
-            AND c.userId = $5
-            AND ca.deletedAt IS NULL
+            WHERE ca.id = $4 AND ca.clientId = c.id AND c.userId = $5 AND ca.deletedAt IS NULL
             RETURNING ca.*
-        `, [type, value, sourceId, id, userId]);
+        `, [p.assetTypeId ?? null, p.value ?? null, p.ownershipPercentage ?? null, id, userId]);
 
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Activo no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
+        if (!rows.length) throw notFound("Activo");
+        const [enriched] = await enrichRows(rows, assetEnrich, dbConn);
+        return enriched;
+    });
 };
 
-export const deleteClientAsset = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
+// PAYMENT METHODS
+const paymentEnrich = { hasSource: false, hasDocument: false, hasVerificationState: false };
 
-        const { rowCount } = await db.query(`
-            UPDATE clientAssets ca
-            SET deletedAt = NOW()
+export const getClientPaymentMethods   = genericGet("clientPaymentMethods", "cpm", paymentEnrich);
+export const deleteClientPaymentMethod = genericDelete("clientPaymentMethods", "cpm", "Método de pago");
+
+export const createClientPaymentMethod = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const parsed = validate({
+            bankId:     validations.select(await getOptions("bankTypes")),
+            typeId:     validations.select(await getOptions("paymentMethodTypes")).optional(),
+            brandId:    validations.select(await getOptions("brandTypes")).optional(),
+            holderName: validations.holderName().optional(),
+            last4:      validations.last4().optional(),
+            alias:      validations.alias().optional(),
+        }, formData);
+
+        const { rows: cr } = await dbConn.query(
+            `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+        );
+        if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+
+        const { rows } = await dbConn.query(`
+            INSERT INTO clientPaymentMethods (clientId, bankId, typeId, brandId, holderName, last4, alias, provider, providerPaymentMethodId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'internal', NULL) RETURNING *
+        `, [cr[0].id, parsed.bankId, parsed.typeId ?? null, parsed.brandId ?? null, parsed.holderName ?? null, parsed.last4 ?? null, parsed.alias ?? null]);
+
+        return rows[0];
+    });
+};
+
+export const updateClientPaymentMethod = async ({ id, userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const incomingKeys = new Set(Object.keys(formData));
+
+        const parsed = validate({
+            bankId:     validations.select(await getOptions("bankTypes")).optional(),
+            typeId:     validations.select(await getOptions("paymentMethodTypes")).optional(),
+            brandId:    validations.select(await getOptions("brandTypes")).optional(),
+            holderName: validations.holderName().optional(),
+            last4:      validations.last4().optional(),
+            alias:      validations.alias().optional(),
+        }, formData);
+
+        const p = Object.fromEntries(Object.entries(parsed).filter(([k]) => incomingKeys.has(k)));
+
+        const { rows } = await dbConn.query(`
+            UPDATE clientPaymentMethods cpm SET
+                bankId     = COALESCE($1, cpm.bankId),
+                typeId     = COALESCE($2, cpm.typeId),
+                brandId    = COALESCE($3, cpm.brandId),
+                holderName = COALESCE($4, cpm.holderName),
+                last4      = COALESCE($5, cpm.last4),
+                alias      = COALESCE($6, cpm.alias),
+                updatedAt  = NOW()
             FROM clients c
-            WHERE ca.id = $1
-            AND ca.clientId = c.id
-            AND c.userId = $2
-        `, [id, userId]);
+            WHERE cpm.id = $7 AND cpm.clientId = c.id AND c.userId = $8 AND cpm.deletedAt IS NULL
+            RETURNING cpm.*
+        `, [p.bankId ?? null, p.typeId ?? null, p.brandId ?? null, p.holderName ?? null, p.last4 ?? null, p.alias ?? null, id, userId]);
 
-        if (rowCount === 0) {
-            return res.status(404).json({
-                error: "Activo no encontrado o no pertenece al usuario"
-            });
-        }
-
-        return res.json({ message: "Activo eliminado" });
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
+        if (!rows.length) throw notFound("Método de pago");
+        return rows[0];
+    });
 };
 
-// LIABILITIES
+// DISBURSEMENT METHODS
+const disbursementEnrich = { hasSource: false, hasDocument: false, hasVerificationState: false };
 
-export const getClientLiabilities = async (req, res) => {
-    try {
-        const userId = req.user.sub;
+export const getClientDisbursementMethods   = genericGet("clientDisbursementMethods", "cdm", disbursementEnrich);
+export const deleteClientDisbursementMethod = genericDelete("clientDisbursementMethods", "cdm", "Método de desembolso");
 
-        const { rows } = await db.query(`
-            SELECT cl.*
-            FROM clientLiabilities cl
-            JOIN clients c ON c.id = cl.clientId
-            WHERE c.userId = $1
-            AND cl.deletedAt IS NULL
-        `, [userId]);
+export const createClientDisbursementMethod = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const parsed = validate({
+            bankId:     validations.select(await getOptions("bankTypes")),
+            typeId:     validations.select(await getOptions("disbursementMethodTypes")).optional(),
+            brandId:    validations.select(await getOptions("brandTypes")).optional(),
+            holderName: validations.holderName().optional(),
+            last4:      validations.last4().optional(),
+            alias:      validations.alias().optional(),
+        }, formData);
 
-        return res.json(rows);
+        const { rows: cr } = await dbConn.query(
+            `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+        );
+        if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
 
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
+        const { rows } = await dbConn.query(`
+            INSERT INTO clientDisbursementMethods (clientId, bankId, typeId, brandId, holderName, last4, alias)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+        `, [cr[0].id, parsed.bankId, parsed.typeId ?? null, parsed.brandId ?? null, parsed.holderName ?? null, parsed.last4 ?? null, parsed.alias ?? null]);
+
+        return rows[0];
+    });
 };
 
-export const createClientLiability = async (req, res) => {
-    try {
-        const userId = req.user.sub;
-        const { type, amount, monthlyPayment } = req.body;
+export const updateClientDisbursementMethod = async ({ id, userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const incomingKeys = new Set(Object.keys(formData));
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({
-                error: "Monto inválido"
-            });
-        }
+        const parsed = validate({
+            bankId:     validations.select(await getOptions("bankTypes")).optional(),
+            typeId:     validations.select(await getOptions("disbursementMethodTypes")).optional(),
+            brandId:    validations.select(await getOptions("brandTypes")).optional(),
+            holderName: validations.holderName().optional(),
+            last4:      validations.last4().optional(),
+            alias:      validations.alias().optional(),
+        }, formData);
 
-        const { rows: clientRows } = await db.query(`
-            SELECT id FROM clients WHERE userId = $1
-        `, [userId]);
+        const p = Object.fromEntries(Object.entries(parsed).filter(([k]) => incomingKeys.has(k)));
 
-        if (!clientRows.length) {
-            return res.status(404).json({
-                error: "Cliente no encontrado"
-            });
-        }
-
-        const clientId = clientRows[0].id;
-
-        const { rows } = await db.query(`
-            INSERT INTO clientLiabilities (clientId, type, amount, monthlyPayment)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `, [clientId, type, amount, monthlyPayment]);
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const updateClientLiability = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-        const { type, amount, monthlyPayment } = req.body;
-
-        if (amount !== undefined && amount <= 0) {
-            return res.status(400).json({
-                error: "Monto inválido"
-            });
-        }
-
-        if (monthlyPayment !== undefined && monthlyPayment <= 0) {
-            return res.status(400).json({
-                error: "Pago mensual inválido"
-            });
-        }
-
-        const { rows } = await db.query(`
-            UPDATE clientLiabilities cl
-            SET 
-                type = COALESCE($1, cl.type),
-                amount = COALESCE($2, cl.amount),
-                monthlyPayment = COALESCE($3, cl.monthlyPayment),
-                updatedAt = NOW()
+        const { rows } = await dbConn.query(`
+            UPDATE clientDisbursementMethods cdm SET
+                bankId     = COALESCE($1, cdm.bankId),
+                typeId     = COALESCE($2, cdm.typeId),
+                brandId    = COALESCE($3, cdm.brandId),
+                holderName = COALESCE($4, cdm.holderName),
+                last4      = COALESCE($5, cdm.last4),
+                alias      = COALESCE($6, cdm.alias),
+                updatedAt  = NOW()
             FROM clients c
-            WHERE cl.id = $4
-            AND cl.clientId = c.id
-            AND c.userId = $5
-            AND cl.deletedAt IS NULL
-            RETURNING cl.*
-        `, [type, amount, monthlyPayment, id, userId]);
+            WHERE cdm.id = $7 AND cdm.clientId = c.id AND c.userId = $8 AND cdm.deletedAt IS NULL
+            RETURNING cdm.*
+        `, [p.bankId ?? null, p.typeId ?? null, p.brandId ?? null, p.holderName ?? null, p.last4 ?? null, p.alias ?? null, id, userId]);
 
-        if (!rows.length) {
-            return res.status(404).json({
-                error: "Deuda no encontrada o no pertenece al usuario"
-            });
-        }
-
-        return res.json(rows[0]);
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
-};
-
-export const deleteClientLiability = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.sub;
-
-        const { rowCount } = await db.query(`
-            UPDATE clientLiabilities cl
-            SET deletedAt = NOW()
-            FROM clients c
-            WHERE cl.id = $1
-            AND cl.clientId = c.id
-            AND c.userId = $2
-        `, [id, userId]);
-
-        if (rowCount === 0) {
-            return res.status(404).json({
-                error: "Deuda no encontrada o no pertenece al usuario"
-            });
-        }
-
-        return res.json({ message: "Deuda eliminada" });
-
-    } catch (err) {
-        return res.status(500).json({ error: err.message });
-    }
+        if (!rows.length) throw notFound("Método de desembolso");
+        return rows[0];
+    });
 };

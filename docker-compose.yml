@@ -30,6 +30,7 @@ services:
       - ./backend:/app:cached
       - ./shared:/app/shared
       - /app/node_modules
+      - ./backend/documents:/app/documents
     env_file:
       - .env
     environment:

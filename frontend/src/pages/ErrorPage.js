@@ -8,13 +8,8 @@ import { useNavigate } from "react-router-dom";
 const ErrorPage = () => {
     const navigate = useNavigate();
 
-    const handleReload = () => {
-        window.location.reload();
-    };
-
-    const handleGoHome = () => {
-        navigate(PATH.index.build());
-    };
+    const handleReload = () => window.location.reload();
+    const handleGoHome = () => navigate(PATH.index.build());
 
     return (
         <FillContainer>

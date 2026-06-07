@@ -4,9 +4,13 @@ frontend/package-lock.json
 backend/node_modules
 backend/package-lock.json
 backend/yarn.lock
+backend/documents
+backend/wizard
 .env
 pgdata/
 backups/
 *.dump
 *.backup
 tests/__pycache__
+package-lock.json
+package.json

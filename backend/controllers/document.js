@@ -96,7 +96,13 @@ export const document = async (req, res) => {
         });
 
         const text = result.response.text();
-        res.json(JSON.parse(text));
+        try {
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const cleanJson = jsonMatch ? jsonMatch[0] : text;
+            res.json(JSON.parse(cleanJson));
+        } catch (parseError) {
+            res.status(500).json({ error: "Error parseando la respuesta de IA", raw: text });
+        }
 
     } catch (err) {
         console.error(err);

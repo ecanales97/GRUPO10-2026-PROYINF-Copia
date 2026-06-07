@@ -13,14 +13,45 @@ const PATH = {
 
     // este se va a borrar, es temporal
     scanner: {
-        path: "escanear",
-        label: "Herramienta OCR"
+        path: "escaner",
+        label: "Escáner (TESTING)"
     },
 
-    // este se movera
-    history: {
-        path: "historial",
-        label: "Historial",
+    dashboard: {
+        path: "panel",
+        label: "Panel",
+    },
+
+    profile: {
+        path: "perfil",
+        label: "Perfil",
+    },
+
+    settings: {
+        path: "configuracion",
+        label: "Configuración",
+
+        setting: {
+            path: ":settingType",
+            label: "Configuración",
+            dynamic: true,
+        },
+    },
+
+    declarations: {
+        path: "declaraciones",
+        label: "Declaraciones",
+        
+        declaration: {
+            path: ":declarationType",
+            label: "Declaración",
+            dynamic: true,
+        }
+    },
+
+    simulations: {
+        path: "simulaciones",
+        label: "Mis simulaciones",
     },
     
     credits: {

@@ -1,127 +1,107 @@
-import { memo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { isValidElement } from "react";
 import { useFormikContext } from "formik";
 
-import { ArrowRight, ArrowLeft } from 'lucide-react';
-
 import useWizard from "context/wizardContext";
+import WizardButton from "components/renderers/WizardButton";
+import WizardNextButton from "components/renderers/WizardNextButton";
+import WizardBackButton from "components/renderers/WizardBackButton";
+import WizardSubmitButton from "components/renderers/WizardSubmitButton";
+import WizardGoHomeButton from "components/renderers/WizardGoHomeButton";
 
-import BtnsContainer from "components/containers/BtnsContainer";
-import Span from "components/Span";
-
-import TEXT from "config/texts";
-
-const WizardButtons = memo(({index, length, struct}) => {
-    const navigate = useNavigate();
-    const { prevStep } = useWizard();
+const WizardButtons = ({ index, length, struct }) => {
+    const wizard = useWizard();
     const { isSubmitting } = useFormikContext();
+
+    index ??= wizard.index;
+    length ??= wizard.length;
+    struct ??= wizard.struct;
 
     const topButtons = struct.steps[index].topButtons ?? [];
     const bottomButtons = struct.steps[index].bottomButtons ?? [];
     const submitText = struct.submitButtonText;
     const continueText = struct.steps[index].continueButtonText;
     const backText = struct.steps[index].backButtonText;
-    const goHomeText = struct.steps[index].goHomeButtonText;
+    const goHomeText = struct.goHomeButtonText;
 
-    // console.log("RENDERIZANDO BOTONES");
+    const useGoHomeButton = wizard.struct.useGoHomeButton ?? true;
 
-    const ContinueButton = {
-        text: continueText ?? (
-            <Span>
-                {TEXT.form.buttons.continue}
-                <ArrowRight size={"1rem"} />
-            </Span>
-        ),
-        type: "submit",
-    };
-    const BackButton = {
-        text: backText ?? (
-            <Span>
-                <ArrowLeft size={"1rem"} />
-                {TEXT.form.buttons.back}
-            </Span>
-        ),
-        type: "button",
-        onClick: prevStep,
-        className: "btn btn-secondary btn-opacity-25",
-    };
-    const GoHomeButton = {
-        text: goHomeText ?? (
-            <Span>
-                <ArrowLeft size={"1rem"} />
-                {TEXT.form.buttons.goHome}
-            </Span>
-        ),
-        type: "button",
-        onClick: () => navigate("/"),
-        className: "btn btn-secondary btn-opacity-25",
-    }
-    const SubmitButton = {
-        text: submitText ?? (
-            <Span>
-                {TEXT.form.buttons.submit}
-            </Span>
-        ),
-        type: "submit",
-    };
+    const buttons = [];
+    buttons.push(...topButtons);
 
-    let buttons = [...topButtons];
     if (index === length - 1) {
-        buttons.push(SubmitButton);
-        if (length !== 1 ) buttons.push(BackButton);
+        buttons.push(
+            <WizardSubmitButton
+                key="wizard-submit"
+                text={submitText}
+                visible={true}
+                loading={isSubmitting}
+            />
+        );
+        if (length !== 1) {
+            buttons.push(
+                <WizardBackButton
+                    key="wizard-back"
+                    text={backText}
+                    visible={true}
+                />
+            );
+        }
     } else if (index === 0) {
-        buttons.push(ContinueButton);
+        buttons.push(
+            <WizardNextButton
+                key="wizard-next"
+                text={continueText}
+                visible={true}
+                loading={isSubmitting}
+            />
+        );
     } else {
-        buttons.push(ContinueButton);
-        buttons.push(BackButton);
+        buttons.push(
+            <WizardNextButton
+                key="wizard-next"
+                text={continueText}
+                visible={true}
+                loading={isSubmitting}
+            />
+        );
+        buttons.push(
+            <WizardBackButton
+                key="wizard-back"
+                text={backText}
+                visible={true}
+            />
+        );
     }
 
-    if (index === 0) {
-        buttons.push(GoHomeButton);
+    if (useGoHomeButton && index === 0) {
+        buttons.push(
+            <WizardGoHomeButton
+                key="wizard-go-home"
+                text={goHomeText}
+                visible={true}
+            />
+        );
     }
 
-    buttons = [...buttons, ...bottomButtons];
+    const finalButtons = [...buttons, ...bottomButtons];
 
     return (
-        <BtnsContainer
-            bottomPosition={false}
-        >
-            { buttons.map((data, index) => {
-                const cn = data.className ?? "btn btn-primary";
-
-                const isDisabled = (data.type === "submit" && isSubmitting);
+        <>
+            {finalButtons.map((button, idx) => {
+                if (isValidElement(button)) {
+                    return button;
+                }
 
                 return (
-                    <button
-                        key={index}
-                        type={data.type ?? "button"}
-                        className={`position-relative ${cn}`}
-                        onClick={(e) => {
-                            data.onClick?.({ e, navigate })
-                        }}
-                        disabled={isDisabled}
-                    >
-                        <span style={{ opacity: isDisabled ? 0 : 1 }}>
-                            {data.text ?? "Button"}
-                        </span>
-                        {isDisabled && (
-                            <div
-                                className="d-flex position-absolute"
-                            >
-                                <div
-                                    className="spinner-border spinner-border-sm"
-                                    style={{ width: "1.5rem", height: "1.5rem" }}
-                                    role="status"
-                                >
-                                    <span className="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
-                        )}
-                    </button>
-                )
-            }) }
-        </BtnsContainer>
+                    <WizardButton
+                        key={button.id ?? button.name ?? idx}
+                        {...button}
+                        loading={button.type === "submit" && isSubmitting}
+                    />
+                );
+            })}
+        </>
     );
-});
+};
 
 export default WizardButtons;

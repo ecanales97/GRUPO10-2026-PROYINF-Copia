@@ -50,34 +50,6 @@ export const handleValidation = (values, schema, step) => {
     return errors;
 };
 
-/**
- * UPDATE: ya no es necesario
- * 
- * retorna un schema, que solo validara los datos presentes en `values`, a partir de un `schema`.
- * 
- * si un `key` no esta definido en el schema, se dejara como opcional.
- * 
- * - `values` - los valores que necesitas del schema, se pasan directo los values del formulario.
- * - `schema` - el schema a transformar
- * - retorna el schema modificado.
- */
-// export const handleSchema = (values, schema) => {
-//     const keys = Object.keys(values);
-//     const shape = schema.shape;
-
-//     const newShape = {};
-
-//     for (const k of keys) {
-//         if (k in shape) {
-//             newShape[k] = shape[k];
-//         } else {
-//             newShape[k] = z.any().optional();
-//         }
-//     }
-
-//     return z.object(newShape);
-// };
-
 
 /**
  * transforma los `values` del formulario, usarlo antes de validar o enviar.
@@ -134,11 +106,18 @@ export const handleRut = ({ e, field, handleChange, setFieldValue }) => {
     setFieldValue(field, parseRut(e.target.value));
 };
 
+export const handleFile = ({ e, field, handleChange, setFieldValue }) => {
+    handleChange(e);
+    const file = e.currentTarget.files?.[0];
+    setFieldValue(field, file);
+}
+
 export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChange, setFieldValue, values}) => {
     handleChange(e);
     const input = e.target;
     const selectionStart = input.selectionStart;
     const value = parseMoneyNumber(input.value);
+    console.log("a",value);
 
     if (!value) {
         setFieldValue(field, "");
@@ -151,8 +130,10 @@ export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChan
     if (value > max || value.length > max.toString().length) {
         setFieldValue(field, values[field]);
         diff = 0;
+        console.log("b",values[field]);
     } else {
         setFieldValue(field, newValue);
+        console.log("c",newValue);
     }
 
     requestAnimationFrame(() => {
@@ -161,6 +142,10 @@ export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChan
         const newPos = Math.max(selectionStart + diff, 0);
         input.setSelectionRange(newPos, newPos);
     });
+};
+
+export const handleMoneyGeneral = ({e, field, handleChange, setFieldValue, values}) => {
+    return handleMoney({e, field, handleChange, setFieldValue, values});
 };
 
 export const handleTerm = ({e, field, max, handleChange, setFieldValue, values}) => {

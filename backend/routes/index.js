@@ -6,6 +6,7 @@ import { router as catalogsRouter } from "./catalogs.js";
 import { router as userRouter } from "./user.js";
 import { router as clientRouter } from "./client.js";
 import { router as documentRouter } from "./document.js";
+import { router as wizardRouter } from "./wizard.js";
 
 const router = express.Router();
 
@@ -14,10 +15,12 @@ router.use("/auth", authRouter);
 router.use("/credits", creditRouter);
 
 router.use("/users", userRouter);
-router.use("/clients", clientRouter);
+router.use("/me", clientRouter);
 
 router.use("/catalogs", catalogsRouter);
 
 router.use("/documents", documentRouter);
+
+router.use("/wizard", wizardRouter);
 
 export { router };
