@@ -68,7 +68,7 @@ const AppRoutes = () => {
         return <ErrorPage/>;
     }
 
-    console.log("post");
+    // console.log("post");
 
     return (
         <Routes>

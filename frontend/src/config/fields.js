@@ -430,13 +430,23 @@ const FIELDS_BASE = {
     }),
 
     assetValue: () => ({
-        id: "assetValue",
-        name: "assetValue",
+        id: "value",
+        name: "value",
         type: "text",
 
         validation: validations.assetValue(),
 
         onChange: handleMoney,
+
+        required: true,
+    }),
+
+    ownershipPercentage: () => ({
+        id: "ownershipPercentage",
+        name: "ownershipPercentage",
+        type: "number",
+
+        validation: validations.ownershipPercentage(),
 
         required: true,
     }),
@@ -477,22 +487,22 @@ const FIELDS_BASE = {
         required: true,
     }),
 
-    city: () => ({
-        id: "city",
-        name: "city",
+    commune: () => ({
+        id: "commune",
+        name: "commune",
         type: "text",
         
-        validation: validations.city(),
+        validation: validations.commune(),
 
         required: true,
     }),
 
-    state: () => ({
-        id: "state",
-        name: "state",
+    region: () => ({
+        id: "region",
+        name: "region",
         type: "text",
         
-        validation: validations.state(),
+        validation: validations.region(),
 
         required: true,
     }),

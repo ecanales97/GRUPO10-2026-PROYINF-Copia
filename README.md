@@ -9,6 +9,12 @@
 **Tutor:** Carlos Arébalo 
 > **Proyecto Base:** Este repositorio corresponde a la continuación del proyecto desarrollado por el GRUPO24-2025-PROYINF durante el semestre 2025-2.
 
+> [!IMPORTANT]
+> La primera vez puede demorarse un poco en levantar los contenedores y la bdd.
+> A veces el frontend sigue pidiendo recargar aunque la bdd ya este lista. Esto pasa porque el backend no vuelve a cargar algunos datos en cache que obtiene de la bdd.
+> Si pasa, reinicia el backend (o todos los contenedores) o guarda cualquier archivo del backend (para forzar hot reload). Con eso deberia recuperar los datos correctamente.
+> Deberia ser un problema solo al iniciar el proyecto por primera vez, luego no deberia ocurrir. Quizas se arregle, quizas no.
+
 ## Recursos (Semestre 2025-2)
 Los siguientes enlaces corresponden al trabajo realizado y entregado durante el semestre anterior:
 - [Wiki del proyecto](https://github.com/not-nen/GRUPO24-2025-PROYINF/wiki)
@@ -59,12 +65,6 @@ docker-compose down -v
 
 > [!IMPORTANT]  
 > En linux, el comando es `docker compose`.
-
-> [!IMPORTANT]
-> La primera vez puede demorarse un poco en levantar los contenedores y la bdd.
-> A veces el frontend sigue pidiendo recargar aunque la bdd ya este lista. Esto pasa porque el backend no vuelve a cargar algunos datos en cache que obtiene de la bdd.
-> Si pasa, reinicia el backend (o todos los contenedores) o guarda cualquier archivo del backend para forzar una recarga. Con eso deberia recuperar los datos correctamente.
-> Deberia ser un problema solo al iniciar el proyecto por primera vez, luego no deberia ocurrir. Quizas se arregle, quizas no.
 
 ### Requerimientos
 

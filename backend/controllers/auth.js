@@ -47,11 +47,11 @@ const registerClient = async (data) => {
             isEmpty(confirmPassword) ||
             isEmpty(nationalId)
         ) {
-            throw new Error("Faltan campos obligatorios");
+            throw new Error("Faltan campos obligatorios.");
         }
 
         if (!passwordsMatch(password, confirmPassword)) {
-            throw new Error("Las contraseñas no coinciden");
+            throw new Error("Las contraseñas no coinciden.");
         }
 
         await validateUniqueEmail(email);
@@ -113,7 +113,7 @@ const registerClient = async (data) => {
 
         await client.query("COMMIT");
 
-        return { message: "Usuario registrado con éxito" };
+        return { message: "Usuario registrado con éxito." };
 
     } catch (err) {
         await client.query("ROLLBACK");
@@ -134,11 +134,11 @@ const loginClient = async (data) => {
         [nationalId]
     );
 
-    if (!rows.length) throw new Error("Usuario no encontrado");
+    if (!rows.length) throw new Error("Rut o contraseña incorrecta.");
 
     const user = rows[0];
     const valid = await bcrypt.compare(password, user.passwordhash);
-    if (!valid) throw new Error("Contraseña incorrecta");
+    if (!valid) throw new Error("Rut o contraseña incorrecta.");
 
     return jwt.sign(
         { sub: user.id, role: user.roleid, clientId: user.clientid },

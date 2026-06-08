@@ -146,19 +146,18 @@ const genericDelete = (table, alias, label) => async (req, res) => {
 };
 
 const genericDeleteWithDocument = (table, alias, label) => async (req, res) => {
-    let docUrl = null;
     try {
+        const { rows } = await (req.dbClient ?? db).query(`
+            SELECT d.url FROM ${table} ${alias}
+            JOIN clients c ON c.id = ${alias}.clientId
+            LEFT JOIN documents d ON d.id = ${alias}.documentId
+            WHERE ${alias}.id = $1 AND c.userId = $2 AND ${alias}.deletedAt IS NULL
+        `, [req.params.id, req.user.sub]);
+
+        if (!rows.length) throw notFound(label);
+        const docUrl = rows[0].url ?? null;
+
         await withDb(req.dbClient, async (dbConn) => {
-            const { rows } = await dbConn.query(`
-                SELECT d.url FROM ${table} ${alias}
-                JOIN clients c ON c.id = ${alias}.clientId
-                LEFT JOIN documents d ON d.id = ${alias}.documentId
-                WHERE ${alias}.id = $1 AND c.userId = $2 AND ${alias}.deletedAt IS NULL
-            `, [req.params.id, req.user.sub]);
-
-            if (!rows.length) throw notFound(label);
-            docUrl = rows[0].url ?? null;
-
             await dbConn.query(`
                 UPDATE ${table} ${alias} SET deletedAt = NOW()
                 FROM clients c
@@ -168,9 +167,9 @@ const genericDeleteWithDocument = (table, alias, label) => async (req, res) => {
             if (docUrl) await dbConn.query(
                 `UPDATE documents SET deletedAt = NOW() WHERE url = $1`, [docUrl]
             );
-            
-            if (docUrl) deleteDocument(docUrl);
         });
+
+        if (docUrl) await deleteDocument(docUrl);
 
         return res.json({ message: `${label} eliminado` });
     } catch (err) {
@@ -182,6 +181,7 @@ const genericDeleteWithDocument = (table, alias, label) => async (req, res) => {
 export const getMeAll = async (req, res) => {
     try {
         const user = await getClientDataByUserId(req.user.sub);
+        // console.log(user);
         if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
         return res.json(user);
     } catch (err) {
@@ -281,7 +281,6 @@ export const updateClientPassword = async (req, res) => {
             UPDATE users SET passwordHash = $1, updatedAt = NOW()
             WHERE id = $2 AND deletedAt IS NULL RETURNING id
         `, [hashedPassword, req.user.sub]);
-
         if (!rows.length) return res.status(404).json({ error: "Usuario no encontrado" });
         return res.json({ message: "Contraseña actualizada" });
     } catch (err) {
@@ -346,13 +345,13 @@ export const createClientIncome = async ({ userId, formData = {}, db: externalDb
                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
             `, [clientId, parsed.monthlyIncome, parsed.incomeTypeId, parsed.isRecurring ?? false, sourceId, documentId, verificationStateId]);
 
-            if (prepared) commitDocument(prepared);
+            if (prepared) await commitDocument(prepared);
 
             const [enriched] = await enrichRows(rows, incomeEnrich, dbConn);
             return enriched;
         });
     } catch (err) {
-        if (prepared) deleteDocument(prepared.filepath);
+        if (prepared) await deleteDocument(prepared.filepath);
         throw err;
     }
 };
@@ -399,13 +398,13 @@ export const createClientEmployment = async ({ userId, formData = {}, db: extern
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
             `, [clientId, parsed.jobTypeId, parsed.contractTypeId, parsed.salary, parsed.startDate, sourceId, documentId, verificationStateId]);
 
-            if (prepared) commitDocument(prepared);
+            if (prepared) await commitDocument(prepared);
 
             const [enriched] = await enrichRows(rows, employmentEnrich, dbConn);
             return enriched;
         });
     } catch (err) {
-        if (prepared) deleteDocument(prepared.filepath);
+        if (prepared) await deleteDocument(prepared.filepath);
         throw err;
     }
 };
@@ -454,13 +453,13 @@ export const createClientAsset = async ({ userId, formData = {}, db: externalDb 
                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
             `, [clientId, parsed.assetTypeId, parsed.value, parsed.ownershipPercentage ?? 100, sourceId, documentId, verificationStateId]);
 
-            if (prepared) commitDocument(prepared);
+            if (prepared) await commitDocument(prepared);
 
             const [enriched] = await enrichRows(rows, assetEnrich, dbConn);
             return enriched;
         });
     } catch (err) {
-        if (prepared) deleteDocument(prepared.filepath);
+        if (prepared) await deleteDocument(prepared.filepath);
         throw err;
     }
 };
@@ -492,6 +491,160 @@ export const updateClientAsset = async ({ id, userId, formData = {}, db: externa
         const [enriched] = await enrichRows(rows, assetEnrich, dbConn);
         return enriched;
     });
+};
+
+// ADDRESSES
+const addressEnrich     = { hasSource: true, hasDocument: true, hasVerificationState: true };
+const addressScanFields = [
+    { key: "address", type: "text"   },
+    { key: "commune", type: "text"   },
+    { key: "region",  type: "text"   },
+];
+
+export const getClientAddresses   = genericGet("clientAddresses", "cad", addressEnrich);
+export const deleteClientAddress  = genericDeleteWithDocument("clientAddresses", "cad", "Dirección");
+
+export const createClientAddress = async ({ userId, formData = {}, db: externalDb } = {}) => {
+    let prepared = null;
+    try {
+        return await withDb(externalDb, async (dbConn) => {
+            const parsed = validate({
+                address: validations.address(),
+                commune: validations.commune(),
+                region:  validations.region(),
+            }, formData);
+
+            const { rows: cr } = await dbConn.query(
+                `SELECT id FROM clients WHERE userId = $1 AND deletedAt IS NULL`, [userId]
+            );
+            if (!cr.length) throw Object.assign(new Error("Cliente no encontrado"), { status: 404 });
+            const clientId = cr[0].id;
+
+            const { stateCode, sourceCode } = resolveVerification(parsed, formData.scan ?? null, addressScanFields, formData);
+            const verificationStateId       = await resolveStateId(stateCode);
+            const sourceId                  = await resolveSourceId(sourceCode);
+
+            const { id: documentId, prepared: p } = await insertDocument(
+                formData.document ?? null, "ADDRESS_PROOF", { clientId }, verificationStateId, dbConn, formData.scan ?? null
+            );
+            prepared = p;
+
+            const { rows } = await dbConn.query(`
+                INSERT INTO clientAddresses (clientId, address, commune, region, sourceId, documentId, verificationStateId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+            `, [clientId, parsed.address, parsed.commune, parsed.region, sourceId, documentId, verificationStateId]);
+
+            if (prepared) await commitDocument(prepared);
+
+            const [enriched] = await enrichRows(rows, addressEnrich, dbConn);
+            return enriched;
+        });
+    } catch (err) {
+        if (prepared) await deleteDocument(prepared.filepath);
+        throw err;
+    }
+};
+
+export const updateClientAddress = async ({ id, userId, formData = {}, db: externalDb } = {}) => {
+    return withDb(externalDb, async (dbConn) => {
+        const incomingKeys = new Set(Object.keys(formData));
+
+        const parsed = validate({
+            address: validations.address().optional(),
+            commune: validations.commune().optional(),
+            region:  validations.region().optional(),
+        }, formData);
+
+        const p = Object.fromEntries(Object.entries(parsed).filter(([k]) => incomingKeys.has(k)));
+
+        const { rows } = await dbConn.query(`
+            UPDATE clientAddresses cad SET
+                address   = COALESCE($1, cad.address),
+                commune   = COALESCE($2, cad.commune),
+                region    = COALESCE($3, cad.region),
+                updatedAt = NOW()
+            FROM clients c
+            WHERE cad.id = $4 AND cad.clientId = c.id AND c.userId = $5 AND cad.deletedAt IS NULL
+            RETURNING cad.*
+        `, [p.address ?? null, p.commune ?? null, p.region ?? null, id, userId]);
+
+        if (!rows.length) throw notFound("Dirección");
+        const [enriched] = await enrichRows(rows, addressEnrich, dbConn);
+        return enriched;
+    });
+};
+
+// PRIMARY SETTERS
+export const postClientPrimaryAddress = async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Id inválido' });
+
+        const clientId = Number(req.user.clientId);
+        if (!Number.isInteger(clientId) || clientId <= 0) return res.status(400).json({ error: 'clientId faltante' });
+
+        await withDb(req.dbClient, async (dbConn) => {
+            const { rowCount } = await dbConn.query(`
+                UPDATE clients c SET primaryAddressId = $1, updatedAt = NOW()
+                FROM clientAddresses a
+                WHERE c.id = $2 AND a.id = $1 AND a.clientId = $2 AND a.deletedAt IS NULL AND c.deletedAt IS NULL
+            `, [id, clientId]);
+
+            if (rowCount === 0) throw notFound('Dirección');
+        });
+
+        return res.json({ message: 'Dirección primaria actualizada' });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+export const postClientPrimaryPaymentMethod = async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Id inválido' });
+
+        const clientId = Number(req.user.clientId);
+        if (!Number.isInteger(clientId) || clientId <= 0) return res.status(400).json({ error: 'clientId faltante' });
+
+        await withDb(req.dbClient, async (dbConn) => {
+            const { rowCount } = await dbConn.query(`
+                UPDATE clients c SET primaryPaymentMethodId = $1, updatedAt = NOW()
+                FROM clientPaymentMethods pm
+                WHERE c.id = $2 AND pm.id = $1 AND pm.clientId = $2 AND pm.deletedAt IS NULL AND c.deletedAt IS NULL
+            `, [id, clientId]);
+
+            if (rowCount === 0) throw notFound('Método de pago');
+        });
+
+        return res.json({ message: 'Método de pago primario actualizado' });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
+};
+
+export const postClientPrimaryDisbursementMethod = async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Id inválido' });
+
+        const clientId = Number(req.user.clientId);
+        if (!Number.isInteger(clientId) || clientId <= 0) return res.status(400).json({ error: 'clientId faltante' });
+
+        await withDb(req.dbClient, async (dbConn) => {
+            const { rowCount } = await dbConn.query(`
+                UPDATE clients c SET primaryDisbursementMethodId = $1, updatedAt = NOW()
+                FROM clientDisbursementMethods dm
+                WHERE c.id = $2 AND dm.id = $1 AND dm.clientId = $2 AND dm.deletedAt IS NULL AND c.deletedAt IS NULL
+            `, [id, clientId]);
+
+            if (rowCount === 0) throw notFound('Método de desembolso');
+        });
+
+        return res.json({ message: 'Método de desembolso primario actualizado' });
+    } catch (err) {
+        return res.status(err.status ?? 500).json({ error: err.message });
+    }
 };
 
 // PAYMENT METHODS

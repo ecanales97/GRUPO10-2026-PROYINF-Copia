@@ -32,6 +32,12 @@ import {
     // DISBURSMENT
     getClientDisbursementMethods,
     deleteClientDisbursementMethod,
+    getClientAddresses,
+    deleteClientAddress,
+
+    postClientPrimaryAddress,
+    postClientPrimaryPaymentMethod,
+    postClientPrimaryDisbursementMethod,
 
 } from "../controllers/client.js";
 
@@ -52,6 +58,11 @@ router.patch("/identity", verifyToken, confirmPassword, updateClientIdentity);
 router.patch("/contact", verifyToken, confirmPassword, updateClientContact);
 router.patch("/password", verifyToken, confirmPassword, updateClientPassword);
 
+// ADDRESS
+router.get("/address", verifyToken, getClientAddresses);
+router.delete("/address/:id", verifyToken, deleteClientAddress);
+router.post("/address/:id", verifyToken, postClientPrimaryAddress);
+
 // INCOME
 router.get("/income", verifyToken, getClientIncome);
 router.delete("/income/:id", verifyToken, deleteClientIncome);
@@ -61,15 +72,17 @@ router.get("/employment", verifyToken, getClientEmployment);
 router.delete("/employment/:id", verifyToken, deleteClientEmployment);
 
 // ASSETS
-router.get("/assets", verifyToken, getClientAssets);
-router.delete("/assets/:id", verifyToken, deleteClientAsset);
+router.get("/asset", verifyToken, getClientAssets);
+router.delete("/asset/:id", verifyToken, deleteClientAsset);
 
 // PAYMENT
 router.get("/payment", verifyToken, getClientPaymentMethods);
 router.delete("/payment/:id", verifyToken, deleteClientPaymentMethod);
+router.post("/payment/:id", verifyToken, postClientPrimaryPaymentMethod);
 
 // DISBURSMENT
 router.get("/disbursment", verifyToken, getClientDisbursementMethods);
 router.delete("/disbursment/:id", verifyToken, deleteClientDisbursementMethod);
+router.post("/disbursment/:id", verifyToken, postClientPrimaryDisbursementMethod);
 
 export { router };

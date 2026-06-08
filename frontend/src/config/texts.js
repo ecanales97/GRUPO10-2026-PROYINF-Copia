@@ -183,15 +183,21 @@ const TEXT_FIELDS = {
     }),
 
     assetType: () => ({
-        label: "Tipo de activo",
-        placeholder: "Selecciona un tipo de activo",
+        label: "Tipo de bien",
+        placeholder: "Selecciona un tipo de bien",
         textHelp: "Ejemplo: propiedad, vehículo, ahorro, etc.",
     }),
 
     assetValue: () => ({
-        label: "Valor del activo",
+        label: "Valor del bien",
         placeholder: `${parseMoneyString(10_000_000)}`,
-        textHelp: "Valor aproximado del activo.",
+        textHelp: "Valor aproximado del bien.",
+    }),
+
+    ownershipPercentage: () => ({
+        label: "¿Cuanto porcentaje te pertenece?",
+        placeholder: "50",
+        textHelp: "Ingresa un número entre 0 y 100. Por ejemplo, si el bien es tuyo al 100%, escribe 100. Si lo compartes con otra persona en partes iguales, escribe 50."
     }),
 
     document: () => ({
@@ -202,6 +208,24 @@ const TEXT_FIELDS = {
     documentRequired: () => ({
         label: "Documento",
         textHelp: "Ingresa un documento, puede ser una imagen o un pdf.",
+    }),
+
+    address: () => ({
+        label: "Dirección",
+        placeholder: "Av. Concha y Toro 1234",
+        textHelp: "Incluye calle, número y departamento o casa si aplica",
+    }),
+
+    commune: () => ({
+        label: "Comuna",
+        placeholder: "Puente Alto",
+        textHelp: "Selecciona la comuna correspondiente a tu dirección",
+    }),
+
+    region: () => ({
+        label: "Región",
+        placeholder: "Región Metropolitana",
+        textHelp: "Selecciona la región donde se ubica tu dirección",
     }),
 };
 

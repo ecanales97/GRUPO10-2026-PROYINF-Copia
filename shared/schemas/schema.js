@@ -35,10 +35,7 @@ const getFirstPaymentDates = (minMonths = 1, maxMonths = 3) => {
         today.getDate()
     );
 
-    const minDateFixed = new Date(minDate);
-    minDateFixed.setDate(minDate.getDate() - 1);
-
-    return { minDate, maxDate, minDateFixed };
+    return { minDate, maxDate };
 };
 
 export const zodSelectField = (options, messages = {}) => {
@@ -190,7 +187,7 @@ export const validations = {
         ),
 
     firstPaymentDate: ({ min, max } = {}) => {
-        const { minDate, maxDate, minDateFixed } = getFirstPaymentDates(min, max);
+        const { minDate, maxDate } = getFirstPaymentDates(min, max);
 
         return z.string({
             required_error: "Debes ingresar una fecha.",
@@ -198,14 +195,16 @@ export const validations = {
             .refine((val) => !isNaN(new Date(val).getTime()), {
                 message: "La fecha no es válida.",
             })
-            .transform((val) => {
+            .refine((val) => {
                 const [year, month, day] = val.split("-").map(Number);
-                return new Date(year, month - 1, day);
-            })
-            .refine((date) => date >= minDateFixed, {
+                return new Date(year, month - 1, day) >= minDate;
+            }, {
                 message: `El primer pago debe ser desde ${minDate.toLocaleDateString()}`,
             })
-            .refine((date) => date <= maxDate, {
+            .refine((val) => {
+                const [year, month, day] = val.split("-").map(Number);
+                return new Date(year, month - 1, day) <= maxDate;
+            }, {
                 message: `El primer pago debe ser antes de ${maxDate.toLocaleDateString()}`,
             });
     },
@@ -337,58 +336,58 @@ export const validations = {
                 .max(100, "El porcentaje no puede exceder el 100%."),
         ),
 
-    source: () =>
-        z.any()
-        .refine(
-            (file) =>
-                file == null ||
-                file === "" ||
-                file instanceof File,
-            {
-                message:
-                    "Debe seleccionar un archivo válido.",
-            }
-        )
-        .refine(
-            (file) =>
-                file == null ||
-                file === "" ||
-                VALID_FILE_TYPES.includes(file.type),
-            {
-                message:
-                    "Formato inválido, debe ser png, jpeg o pdf.",
-            }
-        )
-        .refine(
-            (file) =>
-                file == null ||
-                file === "" ||
-                file.size <= 10 * 1024 * 1024,
-            {
-                message:
-                    "El archivo no puede pesar más de 10MB.",
-            }
-        ),
+    // source: () =>
+    //     z.any()
+    //     .refine(
+    //         (file) =>
+    //             file == null ||
+    //             file === "" ||
+    //             file instanceof File,
+    //         {
+    //             message:
+    //                 "Debe seleccionar un archivo válido.",
+    //         }
+    //     )
+    //     .refine(
+    //         (file) =>
+    //             file == null ||
+    //             file === "" ||
+    //             VALID_FILE_TYPES.includes(file.type),
+    //         {
+    //             message:
+    //                 "Formato inválido, debe ser png, jpeg o pdf.",
+    //         }
+    //     )
+    //     .refine(
+    //         (file) =>
+    //             file == null ||
+    //             file === "" ||
+    //             file.size <= 10 * 1024 * 1024,
+    //         {
+    //             message:
+    //                 "El archivo no puede pesar más de 10MB.",
+    //         }
+    //     ),
         
-    sourceRequired: () =>
-        z.instanceof(File, {
-            message: "Debe seleccionar un archivo.",
-        })
-        .refine((file) => file.size > 0, {
-            message: "Archivo inválido.",
-        })
-        .refine(
-            (file) => VALID_FILE_TYPES.includes(file.type),
-            {
-                message: "Formato inválido, debe ser png, jpeg o pdf.",
-            }
-        )
-        .refine(
-            (file) => file.size <= 10 * 1024 * 1024,
-            {
-                message: "El archivo no puede pesar más de 10MB.",
-            }
-        ),
+    // sourceRequired: () =>
+    //     z.instanceof(File, {
+    //         message: "Debe seleccionar un archivo.",
+    //     })
+    //     .refine((file) => file.size > 0, {
+    //         message: "Archivo inválido.",
+    //     })
+    //     .refine(
+    //         (file) => VALID_FILE_TYPES.includes(file.type),
+    //         {
+    //             message: "Formato inválido, debe ser png, jpeg o pdf.",
+    //         }
+    //     )
+    //     .refine(
+    //         (file) => file.size <= 10 * 1024 * 1024,
+    //         {
+    //             message: "El archivo no puede pesar más de 10MB.",
+    //         }
+    //     ),
 
     document: () =>
         z.any()
@@ -508,11 +507,11 @@ export const validations = {
         z.string()
             .min(1, "Ingresa tu dirección"),
 
-    city: () =>
+    commune: () =>
         z.string()
             .min(1, "Ingresa tu comuna"),
 
-    state: () =>
+    region: () =>
         z.string()
             .min(1, "Ingresa tu región"),
 };
@@ -536,12 +535,14 @@ export const objectValidations = {
                 nationalId !== null &&
                 nationalId !== "" &&
                 String(nationalId).trim() !== "";
+            
+            // console.log(data);
 
-            if (!("nationalId" in data) || nationalId === undefined) {
+            if (!("nationalId" in data)) {
                 if (!useSimple) {
                     ctx.addIssue({
                         path: ["useSimplePersonalInformation"],
-                        message: "Debes confirmar el uso de información personal."
+                        message: `Debes confirmar el uso de información personal.`
                     });
                 }
                 return;
@@ -555,7 +556,7 @@ export const objectValidations = {
             if (hasNationalId && !useSimple) {
                 ctx.addIssue({
                     path: ["useSimplePersonalInformation"],
-                    message: "Debes confirmar el uso de información personal."
+                    message: `Debes confirmar el uso de información personal.`
                 });
             }
         }),
@@ -581,7 +582,7 @@ export const objectValidations = {
         ),
     newConfirmPassword: () => (schema) =>
         schema.refine(
-            ({ newPassword, confirmPassword }) => newPassword === confirmPassword,
+            ({ password, confirmPassword }) => password === confirmPassword,
             {
                 message: "Las contraseñas no coinciden.",
                 path: ["confirmPassword"]

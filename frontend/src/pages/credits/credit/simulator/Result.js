@@ -140,6 +140,7 @@ const Result = () => {
             {isAuthenticated &&
                 selectedOption && (
                     <button
+                        type="button"
                         className="btn btn-primary"
                         onClick={async () => {
                             const res = await saveSimulation(selectedOption);
@@ -153,8 +154,7 @@ const Result = () => {
                                 size={"1.25rem"}
                                 strokeWidth={1.75}
                             />
-                            Guardar
-                            Simulación
+                            Guardar Simulación
                         </Span>
                     </button>
                 )}

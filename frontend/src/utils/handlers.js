@@ -117,7 +117,7 @@ export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChan
     const input = e.target;
     const selectionStart = input.selectionStart;
     const value = parseMoneyNumber(input.value);
-    console.log("a",value);
+    // console.log("a",value);
 
     if (!value) {
         setFieldValue(field, "");
@@ -130,10 +130,10 @@ export const handleMoney = ({e, field, max = Number.MAX_SAFE_INTEGER, handleChan
     if (value > max || value.length > max.toString().length) {
         setFieldValue(field, values[field]);
         diff = 0;
-        console.log("b",values[field]);
+        // console.log("b",values[field]);
     } else {
         setFieldValue(field, newValue);
-        console.log("c",newValue);
+        // console.log("c",newValue);
     }
 
     requestAnimationFrame(() => {

@@ -227,6 +227,7 @@ const WizardInner = ({ struct, navigate, children }) => {
         try {
             await setFields(values);
         } catch (err) {
+            // console.log("a");
             if (err?.expired) {
                 setExpiredModal(true);
                 return;
@@ -235,7 +236,7 @@ const WizardInner = ({ struct, navigate, children }) => {
                 refreshUser();
                 return;
             }
-            console.log(err);
+            // console.log(err);
             helpers.setStatus("Error guardando los datos.");
             return;
         }
@@ -247,29 +248,30 @@ const WizardInner = ({ struct, navigate, children }) => {
             );
 
             const data = await res.json();
-            console.log(res);
-            console.log(data);
-            console.log(data.errors);
-            console.log(data.readonlyErrors);
+            // console.log(res);
+            // console.log(data);
+            // console.log(data.errors);
+            // console.log(data.readonlyErrors);
 
             if (res.status === 410) { setExpiredModal(true); return; }
 
-            await syncFromBackend();
-
             if (res.status === 422) {
                 if (data.failedStep !== undefined && data.failedStep !== index) {
+                    await syncFromBackend();
                     pendingErrorsRef.current = { stepIndex: data.failedStep, errors: data.errors };
                     goStep(data.failedStep);
                     return;
                 }
 
                 if (data.readonlyErrors && Object.keys(data.readonlyErrors).length > 0) {
+                    // console.log("b");
                     helpers.setStatus(
                         Object.values(data.readonlyErrors)[0]
                     );
                 }
 
                 if (data.errors && Object.keys(data.errors).length > 0) {
+                    // console.log("c");
                     helpers.setErrors(data.errors);
                 }
 
@@ -277,10 +279,12 @@ const WizardInner = ({ struct, navigate, children }) => {
             }
 
             if (!res.ok) {
+                // console.log("d");
                 helpers.setStatus(data.error ?? "Error desconocido.");
                 return;
             }
 
+            await syncFromBackend();
             if (data.done) {
                 await syncFromBackend();
                 if (struct.onSubmit) {

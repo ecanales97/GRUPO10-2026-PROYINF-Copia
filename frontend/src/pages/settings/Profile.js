@@ -82,7 +82,7 @@ const Profile = ({ path }) => {
                 fields: FIELDS({
                     nickname: { default: user.nickname, placeholder: user.nickname },
                     name: { default: user.name, placeholder: user.name },
-                    birthDate: {},
+                    birthDate: { default: user.birthdate, placeholder: user.birthdate },
                     maritalStatus: {
                         options: clientMaritalStatus,
                         default: String(user.maritalstatusid),

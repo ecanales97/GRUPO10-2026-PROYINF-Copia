@@ -319,7 +319,7 @@ export const warmupCache = async () => {
     await Promise.all(
         Object.keys(TABLES).map(loadTable)
     );
-    console.log("[cache] ok")
+    console.log("[cache] ok");
 };
 
 export default {

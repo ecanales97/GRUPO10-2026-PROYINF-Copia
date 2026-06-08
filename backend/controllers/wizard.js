@@ -291,13 +291,13 @@ const upload = multer({ storage });
 
 // VALIDATIONS
 
-const validateKnownFields = (writableSchemas, fields) => {
+const validateKnownFields = async (writableSchemas, fields) => {
     if (!writableSchemas || !Object.keys(writableSchemas).length) return { ok: true, errors: {} };
 
     const errors = {};
     for (const [key, schema] of Object.entries(writableSchemas)) {
         if (!(key in fields)) continue;
-        const res = schema.safeParse(fields[key]);
+        const res = await schema.safeParseAsync(fields[key]);
         if (!res.success) {
             errors[key] = res.error.issues[0]?.message ?? "Inválido";
         }
@@ -306,10 +306,10 @@ const validateKnownFields = (writableSchemas, fields) => {
     return { ok: Object.keys(errors).length === 0, errors };
 };
 
-const validateAllFields = (schemas, data) => {
+const validateAllFields = async (schemas, data) => {
     if (!schemas || !Object.keys(schemas).length) return { ok: true, errors: {} };
 
-    const res = z.object(schemas).safeParse(data);
+    const res = await z.object(schemas).safeParseAsync(data);
     if (res.success) return { ok: true, errors: {} };
 
     const errors = {};
@@ -468,7 +468,7 @@ export const createWizardRouter = ({ wizards }) => {
                 );
 
                 const writableSchemas = globalWritableSchemas[wizType] ?? {};
-                const { ok, errors }  = validateKnownFields(writableSchemas, writableFields);
+                const { ok, errors }  = await validateKnownFields(writableSchemas, writableFields);
                 if (!ok) return res.status(422).json({ errors });
 
                 const allowedWritableKeys = new Set([
@@ -572,9 +572,10 @@ export const createWizardRouter = ({ wizards }) => {
                 if (!stepDef?.fields) continue;
 
                 const stepSchemas = getAllSchemas(stepDef.fields);
-                const { ok, errors } = validateAllFields(stepSchemas, formData);
+                const { ok, errors } = await validateAllFields(stepSchemas, formData);
 
-                console.log(ok, formData);
+                // console.log(ok, errors);
+                // console.log(formData);
 
                 if (!ok) {
                     const readonlyKeys = new Set(
@@ -611,10 +612,13 @@ export const createWizardRouter = ({ wizards }) => {
 
             res.json({ ok: true });
         } catch (err) {
-            if (err?.status && err?.error) {
-                return res.status(err.status).json({ error: err.error });
+            if (err?.status && (err?.error || err?.message)) {
+                return res.status(err.status).json({ error: err.error ?? err?.message });
             }
-            console.error("[wizard](step)", err);
+            if (err?.error || err?.message) {
+                return res.status(500).json({ error: err.error ?? err?.message });
+            }
+            console.error("[wizard](step)", err?.status, err?.error ?? err?.message);
             res.status(500).json({ error: "Error procesando el step." });
         }
     });

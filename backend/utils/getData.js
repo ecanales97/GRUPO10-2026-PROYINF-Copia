@@ -30,7 +30,10 @@ export const getClientDataByUserId = async (userId) => {
             c.userId,
             c.nationalId,
             c.birthDate,
-            c.maritalStatusId
+            c.maritalStatusId,
+            c.primaryAddressId,
+            c.primaryPaymentMethodId,
+            c.primaryDisbursementMethodId
 
         FROM users u
         LEFT JOIN clients c ON c.userId = u.id
@@ -168,4 +171,26 @@ export const getCreditsConfig = (creditType) => {
             buildCreditConfig(value),
         ])
     );
+};
+
+export const getAuthenticatedUser = async (req) => {
+    const token = req.cookies.token;
+
+    if (!token) {
+        throw new Error("NO_SESSION");
+    }
+
+    const decoded = jwt.verify(token, SECRET);
+
+    const { rows } = await db.query(`
+        SELECT id, deletedAt
+        FROM users
+        WHERE id = $1
+    `, [decoded.sub]);
+
+    if (!rows.length || rows[0].deletedat) {
+        throw new Error("INVALID_USER");
+    }
+
+    return decoded;
 };

@@ -17,8 +17,8 @@ import { validations, objectValidations } from "../shared/schemas/schema.js";
 
 // SCHEMAS
 
-const consumptionSimulationSchema = z.object({
-    nationalId: validations.nationalId(),
+const consumptionSimulationSchema = ({ useNationalId = true } = {}) => z.object({
+    ...(useNationalId ? { nationalId: validations.nationalId() } : {}),
     useSimplePersonalInformation: validations.useSimplePersonalInformation(),
     income: validations.income(),
 
@@ -27,8 +27,8 @@ const consumptionSimulationSchema = z.object({
     firstPaymentDate: validations.firstPaymentDate(CREDITS_CONFIG.consumption.gracePeriodMonths),
 });
 
-const mortgageSimulationSchema = z.object({
-    nationalId: validations.nationalId(),
+const mortgageSimulationSchema = ({ useNationalId = true } = {}) => z.object({
+    ...(useNationalId ? { nationalId: validations.nationalId() } : {}),
     useSimplePersonalInformation: validations.useSimplePersonalInformation(),
     income: validations.income(),
 
@@ -49,19 +49,6 @@ export const simulation = async (
 
         // PREP
 
-        const schemas = {
-            consumption:
-                objectValidations.useSimplePersonalInformation()(
-                    consumptionSimulationSchema
-                ),
-            mortgage:
-                objectValidations.downPayment(CREDITS_CONFIG.mortgage.downPayment)(
-                    objectValidations.useSimplePersonalInformation()(
-                        mortgageSimulationSchema
-                    )
-                ),
-        };
-
         let clientData = null;
         if (req.user?.sub) {
             clientData = await getClientDataByUserId(
@@ -81,6 +68,21 @@ export const simulation = async (
 
         // VALIDATE
 
+        // console.log(!req.user);
+
+        const schemas = {
+            consumption:
+                objectValidations.useSimplePersonalInformation()(
+                    consumptionSimulationSchema({ useNationalId: !req.user })
+                ),
+            mortgage:
+                objectValidations.downPayment(CREDITS_CONFIG.mortgage.downPayment)(
+                    objectValidations.useSimplePersonalInformation()(
+                        mortgageSimulationSchema({ useNationalId: !req.user })
+                    )
+                ),
+        };
+
         const schema = schemas[creditType];
         if (!schema) {
             return res.status(400).json({
@@ -99,6 +101,8 @@ export const simulation = async (
             });
         }
         const data = parsed.data;
+
+        // console.log(data);
 
         // NATIONAL ID (rut)
 

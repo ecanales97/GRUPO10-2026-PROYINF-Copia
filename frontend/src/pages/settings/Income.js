@@ -94,7 +94,7 @@ const Income = ({ path }) => {
     );
 
 
-    console.log(incomes);
+    // console.log(incomes);
     const IncomesRenderer = ({ incomes, loading, error }) => (
         <DeclarationRenderer
             items={incomes}
@@ -140,15 +140,6 @@ const Income = ({ path }) => {
     return (
         <Container>
             <Container>
-                <Span>
-                    Puedes crear, modificar o eliminar declaraciones cuando quieras.
-                </Span>
-                <Span>
-                    Esta información sera procesada y verificada. Mientras mas completa sea la información que declares, más rapida sera la verificación.
-                </Span>
-
-                <br/>
-
                 <Title>Salario</Title>
                 <Span>
                     Registra tu sueldo correspondiente a tu empleo principal.

@@ -36,7 +36,7 @@ export const useFetch = ({
         const fetch = createFetch();
 
         try {
-            console.log("fetch");
+            // console.log("fetch");
             const result = await fetch.request({
                 path,
                 url,

@@ -20,7 +20,7 @@ const Apply = ({path}) => {
         if (!apply) navigate(PATH.credits.credit.simulator.build({creditType: pathType}));
     }, [navigate, apply, pathType]);
 
-    console.log(apply);
+    // console.log(apply);
 
     const struct = {
         id: "apply",

@@ -253,13 +253,13 @@ CREATE TABLE clientAddresses (
     id SERIAL PRIMARY KEY,
     clientId INT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
 
-    address TEXT,
-    city TEXT,
-    state TEXT,
-    zip TEXT,
-    country TEXT,
+    address TEXT NOT NULL,
+    commune TEXT NOT NULL,
+    region TEXT NOT NULL,
     sourceId INT REFERENCES clientDataSources(id) ON DELETE RESTRICT,
     documentId INT,
+
+    verificationStateId INT NOT NULL DEFAULT 1 REFERENCES verificationStates(id) ON DELETE RESTRICT,
 
     deletedAt TIMESTAMP,
 
@@ -1026,6 +1026,123 @@ CREATE TRIGGER trg_applicationEmployment_check_document BEFORE INSERT OR UPDATE 
 CREATE TRIGGER trg_applicationAssets_check_document BEFORE INSERT OR UPDATE ON applicationAssets FOR EACH ROW EXECUTE FUNCTION ensure_document_for_source();
 
 -- CONSTRAINTS
+
+-- TRIGGERS FOR SOFT-DELETE: si un registro hijo se marca como eliminado (soft delete),
+-- limpiar (NULL) la referencia correspondiente en la tabla `clients`.
+CREATE OR REPLACE FUNCTION set_clients_null_on_child_softdelete()
+RETURNS TRIGGER AS $$
+DECLARE
+    replacement_id INT;
+BEGIN
+    -- clientAddresses -> clients.primaryAddressId
+    IF lower(TG_TABLE_NAME) = 'clientaddresses' THEN
+        IF OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL THEN
+            SELECT id INTO replacement_id
+            FROM clientAddresses
+            WHERE clientId = NEW.clientId AND deletedAt IS NULL AND id <> NEW.id
+            ORDER BY createdAt ASC, id ASC
+            LIMIT 1;
+
+            UPDATE clients
+            SET primaryAddressId = replacement_id
+            WHERE id = NEW.clientId AND primaryAddressId = NEW.id;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- clientPaymentMethods -> clients.primaryPaymentMethodId
+    IF lower(TG_TABLE_NAME) = 'clientpaymentmethods' THEN
+        IF OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL THEN
+            SELECT id INTO replacement_id
+            FROM clientPaymentMethods
+            WHERE clientId = NEW.clientId AND deletedAt IS NULL AND id <> NEW.id
+            ORDER BY createdAt ASC, id ASC
+            LIMIT 1;
+
+            UPDATE clients
+            SET primaryPaymentMethodId = replacement_id
+            WHERE id = NEW.clientId AND primaryPaymentMethodId = NEW.id;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- clientDisbursementMethods -> clients.primaryDisbursementMethodId
+    IF lower(TG_TABLE_NAME) = 'clientdisbursementmethods' THEN
+        IF OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL THEN
+            SELECT id INTO replacement_id
+            FROM clientDisbursementMethods
+            WHERE clientId = NEW.clientId AND deletedAt IS NULL AND id <> NEW.id
+            ORDER BY createdAt ASC, id ASC
+            LIMIT 1;
+
+            UPDATE clients
+            SET primaryDisbursementMethodId = replacement_id
+            WHERE id = NEW.clientId AND primaryDisbursementMethodId = NEW.id;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_clientAddresses_softdelete
+AFTER UPDATE OF deletedAt ON clientAddresses
+FOR EACH ROW
+WHEN (OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL)
+EXECUTE FUNCTION set_clients_null_on_child_softdelete();
+
+CREATE TRIGGER trg_clientPaymentMethods_softdelete
+AFTER UPDATE OF deletedAt ON clientPaymentMethods
+FOR EACH ROW
+WHEN (OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL)
+EXECUTE FUNCTION set_clients_null_on_child_softdelete();
+
+CREATE TRIGGER trg_clientDisbursementMethods_softdelete
+AFTER UPDATE OF deletedAt ON clientDisbursementMethods
+FOR EACH ROW
+WHEN (OLD.deletedAt IS NULL AND NEW.deletedAt IS NOT NULL)
+EXECUTE FUNCTION set_clients_null_on_child_softdelete();
+
+-- Si se inserta una fila hijo y el cliente tiene NULL en la referencia primaria,
+-- asignar esta nueva fila como primaria. No hace nada si ya existe un primario.
+CREATE OR REPLACE FUNCTION set_clients_primary_on_child_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF lower(TG_TABLE_NAME) = 'clientaddresses' THEN
+        UPDATE clients
+        SET primaryAddressId = NEW.id
+        WHERE id = NEW.clientId AND primaryAddressId IS NULL;
+        RETURN NEW;
+    ELSIF lower(TG_TABLE_NAME) = 'clientpaymentmethods' THEN
+        UPDATE clients
+        SET primaryPaymentMethodId = NEW.id
+        WHERE id = NEW.clientId AND primaryPaymentMethodId IS NULL;
+        RETURN NEW;
+    ELSIF lower(TG_TABLE_NAME) = 'clientdisbursementmethods' THEN
+        UPDATE clients
+        SET primaryDisbursementMethodId = NEW.id
+        WHERE id = NEW.clientId AND primaryDisbursementMethodId IS NULL;
+        RETURN NEW;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_clientAddresses_insert_primary
+AFTER INSERT ON clientAddresses
+FOR EACH ROW
+EXECUTE FUNCTION set_clients_primary_on_child_insert();
+
+CREATE TRIGGER trg_clientPaymentMethods_insert_primary
+AFTER INSERT ON clientPaymentMethods
+FOR EACH ROW
+EXECUTE FUNCTION set_clients_primary_on_child_insert();
+
+CREATE TRIGGER trg_clientDisbursementMethods_insert_primary
+AFTER INSERT ON clientDisbursementMethods
+FOR EACH ROW
+EXECUTE FUNCTION set_clients_primary_on_child_insert();
 
 ALTER TABLE clientIncome
     ADD CONSTRAINT fk_clientIncome_documentId

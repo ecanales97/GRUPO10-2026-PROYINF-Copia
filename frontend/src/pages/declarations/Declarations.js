@@ -126,8 +126,40 @@ const Declarations = () => {
                     {
                         fields: FIELDS({
                             address: {},
-                            city: {},
-                            state: {},
+                            commune: {},
+                            region: {},
+                        }, { asList: true }),
+                    },
+                    {
+                        fields: FIELDS({
+                            currentPassword: {},
+                        }, { asList: true }),
+                    }
+                ]
+            },
+        },
+
+        bien: {
+            label: "Bien",
+            struct: {
+                id: "declaration-client-asset",
+                backendId: "create-client-asset",
+                ...baseStruct,
+                
+                steps: [
+                    {
+                        files: {
+                            document: { multiple: false },
+                        },
+                        fields: FIELDS({
+                            document: {},
+                        }, { asList: true }),
+                    },
+                    {
+                        fields: FIELDS({
+                            assetType: { options: catalogs.assetTypes },
+                            assetValue: {},
+                            ownershipPercentage: {},
                         }, { asList: true }),
                     },
                     {

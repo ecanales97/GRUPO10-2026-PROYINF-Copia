@@ -20,7 +20,7 @@ export const Simulator = ({ path }) => {
     const { isAuthenticated } = useAuth();
     const { creditType, pathType, credit } = useCredit();
 
-    console.log(credit);
+    // console.log(credit);
 
     const buildButtonText = (text) => (
         <Span>

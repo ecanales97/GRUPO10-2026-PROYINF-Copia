@@ -62,7 +62,7 @@ export const resolveAllFiles = (fieldValue) => {
     return [resolveFile(fieldValue)];
 };
 
-const genAI    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const BASE_PROMPT = `
 Eres un extractor de datos de documentos. Tu única tarea es leer el documento
 y devolver EXCLUSIVAMENTE un JSON plano con los campos solicitados, sin texto
@@ -99,20 +99,28 @@ ${JSON.stringify(Object.fromEntries(Object.keys(schema).map((k) => [k, null])), 
 `.trim();
 
     const base64 = file.buffer.toString("base64");
-    const result = await model.generateContent({
-        contents: [{
-            role: "user",
-            parts: [
-                { text: fullPrompt },
-                { inlineData: { data: base64, mimeType: file.mimetype } },
-            ],
-        }],
-        generationConfig: { responseMimeType: "application/json" },
-    });
+    
+    try {
+        // throw new Error("503 overloaded");
+        const result = await model.generateContent({
+            contents: [{
+                role: "user",
+                parts: [
+                    { text: fullPrompt },
+                    { inlineData: { data: base64, mimeType: file.mimetype } },
+                ],
+            }],
+            generationConfig: { responseMimeType: "application/json" },
+        });
 
-    const text      = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+        const text      = result.response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const parsed    = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+        return parsed;
+    } catch (err) {
+        console.error(`[scanDocument] error al escanear.`, err.message);
+        throw new Error("Error al escanear documento. Intentalo de nuevo o continua sin un documento.");
+    }
 };
 
 export const saveDocument = async (fieldValue, documentTypeCode, { clientId = null, applicationId = null, dbClient = null } = {}, index = 0) => {
@@ -231,7 +239,37 @@ export const scanner = {
 
         const res = await scanDocument(fieldValue, prompt, schema, index);
         return res;
-    }
+    },
+
+    address: async (fieldValue, index = 0) => {
+        const prompt = 'Estás analizando un documento chileno. Extrae los datos de domicilio del titular del documento.';
+
+        const schema = {
+            address: 'Calle y número (ej: "Av. Providencia 1234"). null si no aparece.',
+            commune: 'Comuna en Chile (ej: "Providencia"). null si no aparece.',
+            region:  'Región en Chile en formato texto (ej: "Región Metropolitana"). null si no aparece.',
+        };
+
+        const res = await scanDocument(fieldValue, prompt, schema, index);
+        return res;
+    },
+
+    asset: async (fieldValue, index = 0) => {
+        const assetTypes = await getAll('assetTypes');
+
+        const assetTypeList = assetTypes.map((a) => a.id + ' = ' + a.name).join(', ');
+
+        const prompt = 'Estás analizando un documento chileno que acredita un bien o patrimonio (puede ser una escritura, certificado de dominio, padrón vehicular, tasación, u otro). Extrae los datos del bien.';
+
+        const schema = {
+            assetTypeId:         'ID numerico del tipo de bien segun esta lista: ' + assetTypeList + '. Elige el que mejor corresponda, o null si no se puede determinar.',
+            value:               'Valor del bien en pesos chilenos como numero entero, sin puntos ni simbolos. Si el documento indica otro tipo de moneda (UF, USD, etc.), conviertelo a pesos chilenos al valor de referencia que aparezca en el documento. null si no aparece.',
+            ownershipPercentage: 'Porcentaje de propiedad del titular sobre el bien, como numero entero entre 0 y 100. Si el documento indica propiedad compartida o copropiedad, extrae el porcentaje correspondiente al titular. Si es propietario unico, retorna 100. null si no se puede determinar.',
+        };
+
+        const res = await scanDocument(fieldValue, prompt, schema, index);
+        return res;
+    },
 };
 
 export const prepareDocument = async (fieldValue, documentTypeCode, { clientId = null, applicationId = null } = {}, index = 0) => {
@@ -260,11 +298,11 @@ export const prepareDocument = async (fieldValue, documentTypeCode, { clientId =
     };
 };
 
-export const commitDocument = (prepared) => {
+export const commitDocument = async (prepared) => {
     fs.writeFileSync(prepared.filepath, prepared.buffer);
 };
 
-export const deleteDocument = (url) => {
+export const deleteDocument = async (url) => {
     try {
         const filepath = path.resolve(url);
         if (fs.existsSync(filepath)) fs.unlinkSync(filepath);

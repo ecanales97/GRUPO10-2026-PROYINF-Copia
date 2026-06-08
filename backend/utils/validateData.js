@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import bcrypt from "bcrypt";
 import { db } from "./db.js";
 import { getClientByNationalId, getUserByEmail } from "./getData.js";
 
@@ -34,7 +35,7 @@ export const validate = (shape, data, refinements = []) => {
     const schema = refinements.reduce((s, fn) => fn(s), z.object(shape));
     const result = schema.safeParse(data);
     if (!result.success) {
-        throw new Error(result.error.errors[0].message);
+        throw new Error(result.error?.errors[0]?.message ?? "Error de validación.");
     }
     return result.data;
 };
@@ -51,4 +52,32 @@ export const validateShape = (shape, data, refinements = []) => {
         if (key && !errors[key]) errors[key] = issue.message;
     }
     return { ok: false, errors };
+};
+
+export const verifyCurrentPassword = async (userId, currentPassword) => {
+    if (!currentPassword) {
+        throw new Error("Debe confirmar la contraseña actual.");
+    }
+
+    const { rows } = await db.query(`
+        SELECT passwordHash
+        FROM users
+        WHERE id = $1
+        AND deletedAt IS NULL
+    `, [userId]);
+
+    if (!rows.length) {
+        throw new Error("Usuario no encontrado.");
+    }
+
+    const isValid = await bcrypt.compare(
+        currentPassword,
+        rows[0].passwordhash
+    );
+
+    if (!isValid) {
+        throw new Error("Contraseña incorrecta.");
+    }
+
+    return true;
 };

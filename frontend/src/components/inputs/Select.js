@@ -122,7 +122,7 @@ const Select = ({
     }));
     const selectedOption = rsOptions.find(opt => opt.value === value) || null;
     const handleChange = (selected) => {
-        console.log(selected?.value);
+        // console.log(selected?.value);
         onChange(selected?.value ?? "");
     };
 

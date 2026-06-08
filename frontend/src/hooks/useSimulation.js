@@ -17,10 +17,7 @@ const cleanFormData = (formData) => {
 const requestsAreEqual = (a, b) =>
     JSON.stringify(a) === JSON.stringify(b);
 
-const handleSaveSimulation = async (
-    data,
-    token
-) => {
+const handleSaveSimulation = async (data) => {
     if (!data) {
         return {
             ok: false,
@@ -35,8 +32,8 @@ const handleSaveSimulation = async (
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
                 },
+                credentials: "include",
                 body: JSON.stringify(data),
             }
         );
@@ -80,21 +77,14 @@ export const useSimulation = ({
     const previousRequestRef =
         useRef(null);
 
-    const saveSimulation = useCallback(
-        async (option) => {
-            return handleSaveSimulation(
-                option,
-                token
-            );
-        },
-        [token]
-    );
+    const saveSimulation = useCallback(async (option) => {
+        return handleSaveSimulation(option);
+    }, []);
 
     useEffect(() => {
         if (!parsedFormData) return;
 
-        const currentRequest =
-            parsedFormData;
+        const currentRequest = parsedFormData;
 
         if (
             previousRequestRef.current &&
@@ -106,59 +96,46 @@ export const useSimulation = ({
             return;
         }
 
-        const fetchSimulation =
-            async () => {
-                try {
-                    setLoading(true);
-                    setError(null);
-                    setFields(null);
-                    
-                    const res = await fetch(
-                        `${backendUrl}/api/credits/${creditType}/simulation`,
-                        {
-                            method: "POST",
-                            headers: token
-                                ? {
-                                      "Content-Type":
-                                          "application/json",
-                                      Authorization: `Bearer ${token}`,
-                                  }
-                                : {
-                                      "Content-Type":
-                                          "application/json",
-                                  },
-                            body: JSON.stringify(
-                                currentRequest
-                            ),
-                        }
-                    );
+        previousRequestRef.current = currentRequest;
 
-                    const json =
-                        await res.json();
+        const fetchSimulation = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                setFields(null);
 
-                    if (!res.ok) {
-                        setFields(
-                            json.fields
-                        );
-
-                        throw new Error(
-                            json.error ||
-                                "Error al simular crédito."
-                        );
+                const res = await fetch(
+                    `${backendUrl}/api/credits/${creditType}/simulation`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        credentials: "include",
+                        body: JSON.stringify(currentRequest),
                     }
+                );
 
-                    await handleDelay(1500);
+                const json = await res.json();
 
-                    previousRequestRef.current =
-                        currentRequest;
+                if (!res.ok) {
+                    setFields(json.fields);
 
-                    setData(json);
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
+                    throw new Error(
+                        json.error ||
+                            "Error al simular crédito."
+                    );
                 }
-            };
+
+                await handleDelay(1500);
+
+                setData(json);
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
 
         fetchSimulation();
     }, [

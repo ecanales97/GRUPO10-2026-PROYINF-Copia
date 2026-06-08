@@ -1,6 +1,12 @@
 import { useLocation, useNavigate, useParams, Navigate } from "react-router-dom";
 
-import { User, MapPin, CreditCard, Wallet, HandCoins } from 'lucide-react';
+import {
+    User,
+    MapPin,
+    // CreditCard,
+    Wallet,
+    HandCoins
+} from 'lucide-react';
 
 import Span from "components/Span";
 
@@ -8,9 +14,10 @@ import PATH from "config/paths";
 
 import Profile from "./Profile";
 import Address from "./Address";
-import Disbursements from "./Disbursements";
+// import Disbursements from "./Disbursements";
 import Income from "./Income";
 import Assets from "./Assets";
+import Container from "../../components/containers/Container";
 
 const SidebarList = ({ sections }) => {
     const navigate = useNavigate();
@@ -86,10 +93,23 @@ const SettingsContent = ({ sections }) => {
     }
 
     return (
-        <>
+        <Container>
             <h1 className="mt-5 mb-5 display-2 baskervville-italic text-uppercase">{currItem.label}</h1>
+            
+            <Span>
+                Puedes crear, modificar o eliminar declaraciones cuando lo necesites.
+            </Span>
+            <Span>
+                Tu información será procesada y verificada. Cuanto más completa sea, más ágil será el proceso.
+            </Span>
+            <Span>
+                Incluir documentación en tus declaraciones es clave: facilita la validación y te permite acceder a créditos rápidamente.
+            </Span>
+
+            <br/>
+
             {currItem.content}
-        </>
+        </Container>
     );
 };
 
@@ -116,7 +136,7 @@ const Settings = () => {
                 {
                     icon: <MapPin size={"1.125rem"}/>,
                     label: "Dirección",
-                    content: <Address path={PATH.settings.setting.build({ settingType: "perfil" })}/>,
+                    content: <Address path={PATH.settings.setting.build({ settingType: "direccion" })}/>,
                     path: PATH.settings.setting.build({ settingType: "direccion" })
                 },
             ]
@@ -129,15 +149,16 @@ const Settings = () => {
                     path: PATH.settings.setting.build({ settingType: "ingresos" })
                 },{
                     icon: <HandCoins size={"1.125rem"}/>,
-                    label: "Patrimonio",
-                    content: <Assets path={PATH.settings.setting.build({ settingType: "patrimonio" })}/>,
-                    path: PATH.settings.setting.build({ settingType: "patrimonio" })
-                },{
-                    icon: <CreditCard size={"1.125rem"}/>,
-                    label: "Desembolsos",
-                    content: <Disbursements path={PATH.settings.setting.build({ settingType: "desembolsos" })}/>,
-                    path: PATH.settings.setting.build({ settingType: "desembolsos" })
+                    label: "Bienes",
+                    content: <Assets path={PATH.settings.setting.build({ settingType: "bienes" })}/>,
+                    path: PATH.settings.setting.build({ settingType: "bienes" })
                 },
+                // {
+                //     icon: <CreditCard size={"1.125rem"}/>,
+                //     label: "Desembolsos",
+                //     content: <Disbursements path={PATH.settings.setting.build({ settingType: "desembolsos" })}/>,
+                //     path: PATH.settings.setting.build({ settingType: "desembolsos" })
+                // },
             ]
         }
     ];
